@@ -3,4 +3,9 @@
 .RData
 .Ruserdata
 .DS_Store
+*.zip
+/public/*
+/blogdown/*
+*_cache*
+.httr-oauth
 Thumbs.db
