@@ -1,0 +1,441 @@
+---
+title: Пример анализа географических данных по пожарам
+author: admin
+date: '2021-01-17'
+slug: geodata-fire
+categories: ["R"]
+tags: ["rstats", "геоданные"]
+subtitle: 'пример анализа географических данных по пожарам с использованием языка программирования R'
+summary: 'Здесь будут показаны примеры работы с библиотекой `osmdata` для загрузки географических данных с OpenStreetMap и последующей визуализации на примерах, связанных со статистикой пожаров.'
+authors: 
+- admin
+lastmod: '2021-01-23'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index.ru_files/header-attrs/header-attrs.js"></script>
+
+
+<p>Для работы с географическими данными в языке программирования <strong>R</strong> существует большое количество различных библиотек. Хорошим источником по анализу, визуализации и моделированию геоданных может служить книга <a href="https://geocompr.robinlovelace.net/">Geocomputation with R</a> или учебник <a href="https://tsamsonov.github.io/r-geo-course/index.html">Визуализация и анализ географических данных на языке R</a>.</p>
+<p>Замечательный сервис <a href="https://anvaka.github.io/city-roads/">city roads</a> позволяет по названию города отобразить карты дорог из <a href="https://www.openstreetmap.org/">OpenStreetMap</a> - свободно доступной базы данных всех местоположений в мире с открытой лицензией.</p>
+<div class="figure">
+<img src="%D0%9D%D0%BE%D0%B2%D0%BE%D1%81%D0%B8%D0%B1%D0%B8%D1%80%D1%81%D0%BA.png" alt="" />
+<p class="caption">Карта дорог города Новосибирска</p>
+</div>
+<p>Мы сделаем практически тоже самое, но дополнительно нанесем необходимые аналитические данные на карту.</p>
+<p>Здесь будет рассмотрена работа с сервисом OpenStreetMap на примере библиотеки <a href="https://github.com/ropensci/osmdata">osmdata</a>, которая использует <a href="https://wiki.openstreetmap.org/wiki/Overpass_API">Overpass API</a>. Данные, которые мы будем обрабатывать и визуализировать, относятся к количеству пожаров в городе Новосибирске за последние несколько лет.</p>
+<div id="исходные-данные-по-пожарам" class="section level1">
+<h1>Исходные данные по пожарам</h1>
+<p>Подключим небходимые библиотеки.</p>
+<pre class="r"><code>library(tidyverse)
+library(magrittr)
+library(RCurl)
+
+library(osmdata)</code></pre>
+<p>Загрузим <strong>данные по пожарам в Новосибирске</strong><a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>, включающие период с 2016 года по 2020 год, предварительно удалив при этом строки, содержащие пропущенные данные.</p>
+<p>{{% callout note %}}</p>
+<p>Отметим, что наши данные не охватывают полный объем значений по количеству пожаров, а только те данные, где удалось получить географические координаты по адресам пожаров и служат исключительно для иллюстрации рассматриваемых методов. Тем не менее, данные хорошо передают общую тенденцию и описываемые подходы обработки данных и их визуализации.</p>
+<p>{{% /callout %}}</p>
+<pre class="r"><code>url &lt;- getURL(&quot;https://raw.githubusercontent.com/materov/blog_data/main/fire_NSK.csv&quot;)
+fire &lt;- read.csv(text = url)
+
+fire %&lt;&gt;% na.omit()
+fire %&lt;&gt;% as_tibble()
+fire$DATE_ZVK %&lt;&gt;% as.Date()
+
+fire</code></pre>
+<pre><code>## # A tibble: 5,134 x 13
+##        X NOMER_ZVK DATE_ZVK   ADDRES RIDE_TYPE OBJECT_CATEGORIE geo_lon geo_lat
+##    &lt;int&gt;     &lt;int&gt; &lt;date&gt;     &lt;fct&gt;  &lt;fct&gt;     &lt;fct&gt;              &lt;dbl&gt;   &lt;dbl&gt;
+##  1     1   1600038 2016-01-01 ул. М… Тушение … Транспортные ср…    82.9    55.1
+##  2     2   1600071 2016-01-01 ул. Ш… Тушение … Многоквартирный…    83.1    54.9
+##  3     3   1600255 2016-01-02 ул. К… Тушение … Многоквартирный…    83.0    55.0
+##  4     5   1600287 2016-01-02 ул. Н… Тушение … Многоквартирный…    83.0    55.1
+##  5     6   1600319 2016-01-03 ул. Ф… Тушение … Здания производ…    82.9    55.0
+##  6     7   1600410 2016-01-03 ул. В… Тушение … Одноквартирный …    83.0    55.0
+##  7     8   1600412 2016-01-03 мрн. … Тушение … Многоквартирный…    82.9    55.0
+##  8     9   1600435 2016-01-04 ул. Ш… Тушение … Прочие обьекты …    82.9    55.0
+##  9    10   1600436 2016-01-04 ул. С… Тушение … Транспортные ср…    82.9    55.0
+## 10    11   1600440 2016-01-04 ул. В… Тушение … Транспортные ср…    83.0    55.0
+## # … with 5,124 more rows, and 5 more variables: PRIB_TIME &lt;int&gt;,
+## #   LOC_TIME &lt;int&gt;, LPP_TIME &lt;int&gt;, SQUARE_LOC &lt;dbl&gt;, PERSONNEL &lt;dbl&gt;</code></pre>
+<p>Для дальнейшего анализа оставим только значимые переменные в таблице:</p>
+<ul>
+<li>дату пожара;</li>
+<li>категорию объекта;</li>
+<li>географические координаты;</li>
+<li>время прибытия;</li>
+<li>площадь пожара.</li>
+</ul>
+<pre class="r"><code>fire &lt;-
+fire %&gt;% 
+  select(DATE_ZVK, 
+         geo_lon, geo_lat,
+         PRIB_TIME, SQUARE_LOC)
+
+fire</code></pre>
+<pre><code>## # A tibble: 5,134 x 5
+##    DATE_ZVK   geo_lon geo_lat PRIB_TIME SQUARE_LOC
+##    &lt;date&gt;       &lt;dbl&gt;   &lt;dbl&gt;     &lt;int&gt;      &lt;dbl&gt;
+##  1 2016-01-01    82.9    55.1         6        130
+##  2 2016-01-01    83.1    54.9         4          3
+##  3 2016-01-02    83.0    55.0        10          0
+##  4 2016-01-02    83.0    55.1         5         15
+##  5 2016-01-03    82.9    55.0         7          5
+##  6 2016-01-03    83.0    55.0         8         81
+##  7 2016-01-03    82.9    55.0         8          0
+##  8 2016-01-04    82.9    55.0         9         20
+##  9 2016-01-04    82.9    55.0         7          6
+## 10 2016-01-04    83.0    55.0        10          2
+## # … with 5,124 more rows</code></pre>
+<p>Отметим неоднородность исходных данных, а именно, в последние два рассматриваемых года учитывалось гораздо больше пожаров, что видно из графика ниже.</p>
+<pre class="r"><code>fire %&gt;% 
+  count(., DATE_ZVK) %&gt;% 
+  ggplot(aes(DATE_ZVK, n)) + geom_line() +
+  labs(x = &quot;дата&quot;,
+       y = &quot;количество пожаров&quot;)</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-3"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-3-1.png" alt="*Количество пожаров в сутки в г. Новосибирске (2016-2020 гг.)*" width="768" />
+<p class="caption">
+Рисунок 1: <em>Количество пожаров в сутки в г. Новосибирске (2016-2020 гг.)</em>
+</p>
+</div>
+<p>Дествительно, в 2019 и в 2020 годах на графике наблюдаются существенные всплески количества пожаров, что можно объяснить переходом на новую законодательную базу с 1 января 2019 года, при котром понятия <em>пожар</em> и <em>загорание</em> были совмещены. Для устранения неоднородности можно сделать фильтрацию данных, исключив такие объекты горения как мусор и траву, но мы этого делать не будем.</p>
+</div>
+<div id="предварительная-подготовка-картографических-данных" class="section level1">
+<h1>Предварительная подготовка картографических данных</h1>
+<p>Сначала создадим карту дорог Новосибирска, а затем, используя билиотеку <code>ggplot2</code>, нанесем послойно на получившуюся карту информацию по пожарам.</p>
+<p>На первом этапе, с помощью библиотеки <code>osmdata</code> загрузим данные из OpenStreetMap. Данные в базе OpenStreetMap хранятся в виде пар: <strong>ключ</strong> (<strong>key</strong>) и <strong>значение</strong> (<strong>value</strong>). Будем следовать той же идеологии как на странице <a href="https://ggplot2tutor.com/streetmaps/streetmaps/">Streetmaps</a>: загрузим данные по крупным улицам (streets), небольшим улицам (small_streets) и рекам (river). Все возможные значения любого ключа можно увидеть командой <code>available_tags()</code> (полные списки значений довольно большие), например</p>
+<pre class="r"><code>available_tags(&quot;highway&quot;) %&gt;% head(., 10)</code></pre>
+<pre><code>##  [1] &quot;bridleway&quot;              &quot;bus_guideway&quot;           &quot;bus_stop&quot;              
+##  [4] &quot;construction&quot;           &quot;corridor&quot;               &quot;crossing&quot;              
+##  [7] &quot;cycleway&quot;               &quot;elevator&quot;               &quot;emergency_access_point&quot;
+## [10] &quot;emergency_bay&quot;</code></pre>
+<p>Данные из OpenStreetMap импортируются в координаты с помощью функции <code>get_bb()</code>, затем они фильтруются функцией <code>add_osm_feature()</code> по необходимым геотегам и передаются на вывод функцией <code>osmdata_sf()</code> для последующей отрисовки в <code>ggplot2</code>.</p>
+<pre class="r"><code># проспекты и большие улицы
+streets &lt;- getbb(&quot;Novosibirsk Russia&quot;) %&gt;%
+  opq()%&gt;%
+  add_osm_feature(key = &quot;highway&quot;, 
+                  value = c(&quot;motorway&quot;, &quot;primary&quot;, 
+                            &quot;secondary&quot;, &quot;tertiary&quot;)) %&gt;%
+  osmdata_sf()
+
+# небольшие улицы
+small_streets &lt;- getbb(&quot;Novosibirsk Russia&quot;) %&gt;%
+  opq()%&gt;%
+  add_osm_feature(key = &quot;highway&quot;, 
+                  value = c(&quot;residential&quot;, &quot;living_street&quot;,
+                            &quot;unclassified&quot;,
+                            &quot;service&quot;, &quot;footway&quot;)) %&gt;%
+  osmdata_sf()
+
+# реки
+river &lt;- getbb(&quot;Novosibirsk Russia&quot;) %&gt;%
+  opq() %&gt;%
+  add_osm_feature(key = &quot;waterway&quot;, value = &quot;river&quot;) %&gt;%
+  osmdata_sf()</code></pre>
+</div>
+<div id="отрисовка-карт-и-нанесение-информации-по-пожарам" class="section level1">
+<h1>Отрисовка карт и нанесение информации по пожарам</h1>
+<p>Теперь мы готовы визуализировать карту дорог и рек Новосибирска.</p>
+<pre class="r"><code>ggplot() +
+  # проспекты и большие улицы
+  geom_sf(data = streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.6) +
+  # небольшие улицы
+  geom_sf(data = small_streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.4) +
+  # реки
+  geom_sf(data = river$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.2,
+          alpha = 0.5) +
+  # географические границы города Новосибирска
+  coord_sf(xlim = c(82.7, 83.19), 
+           ylim = c(54.77, 55.23),
+           expand = FALSE) </code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-6"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-6-1.png" alt="*OpenStreetMap карта города Новосибирска*" width="672" />
+<p class="caption">
+Рисунок 2: <em>OpenStreetMap карта города Новосибирска</em>
+</p>
+</div>
+<div id="нанесение-на-карту-данных-по-пожарам" class="section level2">
+<h2>Нанесение на карту данных по пожарам</h2>
+<p>Нанесем на карту точки, где произошли пожары в рассматриваемый период.</p>
+<pre class="r"><code># базовый график
+ggplot() +
+  geom_sf(data = streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;white&quot;,
+          size = 0.4,
+          alpha = 0.8) +
+  geom_sf(data = small_streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;#ffbe7f&quot;,
+          size = 0.2,
+          alpha = 0.6) +
+  geom_sf(data = river$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;#7fc0ff&quot;,
+          size = 0.2,
+          alpha = 0.5) +
+  coord_sf(xlim = c(82.62, 83.17), 
+           ylim = c(54.73, 55.2),
+           expand = FALSE) +
+  # точки, где произошли пожары
+  geom_point(data = fire, aes(geo_lon, geo_lat), 
+             shape = 1, 
+             stroke = 0.8,
+             color = &quot;#FC4E07&quot;, 
+             alpha = 0.3) + 
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = &quot;#282828&quot;)
+  )</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-7"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-7-1.png" alt="*Визуализация пожаров (2016-2020 гг.) на карте города Новосибирска*" width="672" />
+<p class="caption">
+Рисунок 3: <em>Визуализация пожаров (2016-2020 гг.) на карте города Новосибирска</em>
+</p>
+</div>
+</div>
+<div id="плотность-пожаров" class="section level2">
+<h2>Плотность пожаров</h2>
+<p>На полученной карте видно, что наши данные по пожарам хорошо согласуются с данными OpenStreetMap.</p>
+<p>Теперь мы бы хотели получить представление о проблемных участках с максимальным количеством пожаров, однако наслоения точек на предыдущем рисунке не позволяют сделать качественные выводы. Визуально выделить участки с наибольшим количестовм пожаров можно двумя способами:</p>
+<ul>
+<li>испольовать непрерывный градиент (см., например <a href="https://journal.r-project.org/archive/2013-1/kahle-wickham.pdf">Kahle &amp; Wikham</a>);</li>
+<li>разделить всю область значений на равные отрезки и использовать различную интенсивность цвета для каждого уровня.</li>
+</ul>
+<p>Мы используем вторую возможность отрисовки участков количественно отделяющих пожары, используя <code>geom_density2d_filled()</code> и <code>geom_density2d()</code> для визуализации ядерной плотности.</p>
+<pre class="r"><code># базовый график
+ggplot() +
+  geom_sf(data = streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.8) +
+  geom_sf(data = small_streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.8) +
+  geom_sf(data = river$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;#7fc0ff&quot;,
+          size = 0.2,
+          alpha = 0.6) +
+  coord_sf(xlim = c(82.62, 83.17), 
+           ylim = c(54.73, 55.2),
+           expand = FALSE) +
+  # градиент
+  geom_density2d_filled(data = fire, aes(geo_lon, geo_lat), 
+             alpha = 0.7) +
+  # линии уровня
+  geom_density2d(data = fire, aes(geo_lon, geo_lat), 
+             color = &quot;black&quot;, alpha = 0.8) +
+  # цвет
+  scale_fill_brewer() +
+  labs(fill = &quot;количество пожаров:&quot;) + 
+  theme_void() +
+  theme(legend.position = &quot;top&quot;)  </code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-8"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-8-1.png" alt="*Плотность пожаров (2016-2020 гг.) на карте города Новосибирска*" width="672" />
+<p class="caption">
+Рисунок 4: <em>Плотность пожаров (2016-2020 гг.) на карте города Новосибирска</em>
+</p>
+</div>
+</div>
+<div id="нанесение-на-карту-данных-по-времени-прибытия" class="section level2">
+<h2>Нанесение на карту данных по времени прибытия</h2>
+<p>Рассмотрим на карте данные по прибытию подразделений :fire_engine: , выделив только те события, где время прибытия составило более 10 минут.</p>
+<pre class="r"><code># https://cran.r-project.org/web/packages/janitor/vignettes/tabyls.html
+fire %&gt;% 
+  mutate(
+    late_category = case_when(
+      PRIB_TIME &gt; 10 ~ &quot;&gt; 10 мин&quot;,
+      TRUE ~ &quot;&lt;= 10 мин&quot;
+    )
+  ) %&gt;%
+  janitor::tabyl(late_category) %&gt;%
+  janitor::adorn_pct_formatting(digits = 1) %&gt;% 
+  purrr::set_names(&quot;категория&quot;, &quot;количество&quot;, &quot;процент&quot;)</code></pre>
+<pre><code>##  категория количество процент
+##  &lt;= 10 мин       4653   90.6%
+##   &gt; 10 мин        481    9.4%</code></pre>
+<p>Как видно из таблицы выше, процент событий с временем прибытия более 10 минут довольно мал по сравнению с общим количеством пожаров.
+Нанесем на карту точки с долгим временем прибытия и дислокации пожарных частей города Новосибирска.</p>
+<pre class="r"><code>fire_late_points &lt;- fire %&gt;% 
+  filter(PRIB_TIME &gt; 10) %&gt;% 
+  select(geo_lon, geo_lat)</code></pre>
+<p><em>Координаты некоторых основных пожарных частей г. Новосибирска</em></p>
+<pre class="r"><code>fire_stations &lt;-
+  tribble(
+    ~name, ~geo_lon, ~geo_lat,
+    &quot;СПСЧ&quot;, 82.97908757779791, 55.10638825,
+    &quot;СПСЧ-3&quot;, 83.178200, 54.937824,
+    &quot;ПСЧ-1&quot;, 82.93324274637051, 55.0254707,
+    &quot;ПСЧ-2&quot;, 82.9184471, 55.0422414,
+    &quot;ПСЧ-3&quot;, 82.95710502339779, 55.010753449999996,
+    &quot;ПСЧ-4&quot;, 82.97564223619477, 55.05086455,
+    &quot;ПСЧ-5&quot;, 82.89667373263423, 55.05429615,
+    &quot;ПСЧ-6&quot;, 82.84037900000001, 54.99433685,
+    &quot;ПСЧ-7&quot;, 83.09816122044344, 54.9741693,
+    &quot;ПСЧ-8&quot;, 83.099370, 54.858548,
+    &quot;ПСЧ-9&quot;, 82.900372, 54.958476,
+    &quot;ПСЧ-10&quot;, 82.96720840392814, 55.1805103,
+    &quot;ПСЧ-11&quot;, 83.128238, 54.744382,
+    &quot;ПСЧ-15&quot;, 82.79992967036416, 54.996677250000005,
+    &quot;ПСЧ-15 пост&quot;, 82.859950, 55.027657,    
+    &quot;ПСЧ-19&quot;, 82.98182030377154, 55.0763039,
+    &quot;ПСЧ-24&quot;, 82.97588842389447, 54.863162349999996,
+    &quot;ПСЧ-27&quot;, 82.988649, 55.064143,
+    &quot;ПСЧ-32&quot;, 83.051309, 54.740612,
+    &quot;ПСЧ-37&quot;, 82.996118, 54.927500,
+    &quot;ПСЧ-46&quot;, 82.7214455809438, 54.9883955
+)</code></pre>
+<pre class="r"><code>require(ggrepel)
+
+# базовый график
+ggplot() +
+  geom_sf(data = streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.4) +
+  geom_sf(data = small_streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.3) +
+  geom_sf(data = river$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;#7fc0ff&quot;,
+          size = 0.2,
+          alpha = 0.6) +
+  coord_sf(xlim = c(82.62, 83.17), 
+           ylim = c(54.73, 55.2),
+           expand = FALSE) +
+  theme_void() +
+  # точки с долгим временем прибытия
+  geom_point(data = fire_late_points, aes(geo_lon, geo_lat), 
+             color = &quot;firebrick2&quot;, alpha = 0.7) + 
+  # пожарные части
+  geom_point(data = fire_stations, aes(geo_lon, geo_lat), 
+             color = &quot;blue&quot;, alpha = 1, shape = 8, size = 2.5, stroke = 1) +  
+  # названия пожарных частей
+  geom_label_repel(data = fire_stations, aes(geo_lon, geo_lat, label = name), 
+             size = 3, alpha = 0.9)</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-12"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-12-1.png" alt="*Данные по времени прибытия пожарно-спасательных подразделений &gt; 10 мин. на пожары (2016-2020 гг.) на карте города Новосибирска*" width="672" />
+<p class="caption">
+Рисунок 5: <em>Данные по времени прибытия пожарно-спасательных подразделений &gt; 10 мин. на пожары (2016-2020 гг.) на карте города Новосибирска</em>
+</p>
+</div>
+<p>Увеличив фрагмент карты, можно видеть какие районы являются проблемными для их достижения.</p>
+<div class="figure"><span id="fig:unnamed-chunk-13"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-13-1.png" alt="*Фрагмент данных, иллюстрирующих труднодостижимые районы прибытия пожарно-спасательных подразделений города Новосибирска*" width="768" />
+<p class="caption">
+Рисунок 6: <em>Фрагмент данных, иллюстрирующих труднодостижимые районы прибытия пожарно-спасательных подразделений города Новосибирска</em>
+</p>
+</div>
+</div>
+<div id="визуализация-пожаров-по-площадям" class="section level2">
+<h2>Визуализация пожаров по площадям</h2>
+<p>В конце статьи проведем мини-исследование по площадям пожаров. Проверим следующую гипотезу: <strong>наиболее крупные пожары происходили на окраинах города</strong>.</p>
+<p>Для отображения больших значений, таких как площади в нашем случае, удобно рассмотреть вместо значения величины ее десятичный логарифм.
+Здесь же отфильтруем данные, оставив только те пожары, площадь которых составила более 1 000 кв. м.</p>
+<pre class="r"><code>fire_square &lt;- fire %&gt;% 
+  filter(SQUARE_LOC &gt; 0) %&gt;% 
+  select(geo_lon, geo_lat, SQUARE_LOC) %&gt;% 
+  mutate(log_square = log10(SQUARE_LOC)) 
+
+fire_square &lt;- fire_square %&gt;% filter(log_square &gt;= 3)</code></pre>
+<p>Сделаем разбивку пожаров по соответствующим категориям.</p>
+<pre class="r"><code>fire_square &lt;-
+fire_square %&gt;% 
+  mutate(
+    size_category = case_when(
+      log_square &gt;= 1 &amp; log_square &lt; 2 ~ &quot;&gt; 10 кв. м&quot;,
+      log_square &gt;= 2 &amp; log_square &lt; 3 ~ &quot;&gt; 100 кв. м&quot;,
+      log_square &gt;= 3 &amp; log_square &lt; 4 ~ &quot;&gt; 1 000 кв. м&quot;,
+      log_square &gt;= 4 &amp; log_square &lt; 5 ~ &quot;&gt; 10 000 кв. м&quot;,
+      log_square &gt;= 5 &amp; log_square &lt; 100 ~ &quot;&gt; 100 000 кв. м&quot;,
+      TRUE ~ &quot;&lt;= 10 кв. м&quot;
+    )
+  ) %&gt;% 
+  mutate(size_category = factor(size_category, 
+                                levels = c(&quot;&gt; 10 кв. м&quot;, 
+                                           &quot;&gt; 100 кв. м&quot;, 
+                                           &quot;&gt; 1 000 кв. м&quot;, 
+                                           &quot;&gt; 10 000 кв. м&quot;, 
+                                           &quot;&gt; 100 000 кв. м&quot;)))</code></pre>
+<p>Отобразим пожары с учетом их площадей чтобы проверить, насколько верна наша гипотеза.</p>
+<pre class="r"><code># базовый график
+ggplot() +
+  geom_sf(data = streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.4) +
+  geom_sf(data = small_streets$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;black&quot;,
+          size = 0.4,
+          alpha = 0.3) +
+  geom_sf(data = river$osm_lines,
+          inherit.aes = FALSE,
+          color = &quot;#7fc0ff&quot;,
+          size = 0.5,
+          alpha = 0.8) +
+  coord_sf(xlim = c(82.68, 83.19), 
+           ylim = c(54.77, 55.23),
+           expand = FALSE) +
+  theme_void() +
+  # площади пожаров
+  geom_point(data = fire_square, aes(geo_lon, geo_lat, 
+                                     color = size_category,
+                                     size = size_category), 
+             alpha = 0.7, stroke = 2) +
+  scale_color_brewer(palette = &quot;Reds&quot;) +
+  labs(size = &quot;площадь пожара:&quot;, color = &quot;&quot;)</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-16"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-16-1.png" alt="*Пожары в г. Новосибирске (2016-2020 гг.) с площадью &gt; 1 000 кв. м*" width="672" />
+<p class="caption">
+Рисунок 7: <em>Пожары в г. Новосибирске (2016-2020 гг.) с площадью &gt; 1 000 кв. м</em>
+</p>
+</div>
+<p>Как показывет предыдущий рисунок, действительно, наиболее крупные по площади пожары происходили на окраинах города.</p>
+</div>
+</div>
+<div id="заключение" class="section level1">
+<h1>Заключение</h1>
+<p>В статье были рассмотрены простейшие возможности языка программирования <strong>R</strong> в применении к анализу географических данных по пожарам и их последствиям. Были рассмотрены нанесение на карту:</p>
+<ul>
+<li>исходных данных по пожарам;</li>
+<li>плотности пожаров;</li>
+<li>данных по времени прибытия подразделений;</li>
+<li>площадей пожаров.</li>
+</ul>
+<p>Используемые аналитические инструменты и сделанные выводы могут быть полезны при планировании и оптимизации ресурсов пожарно-спасательных подразделений, а также при рассмотрении чрезвычайных ситуаций иного рода.</p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Автор выражает благодарность <a href="https://www.sibpsa.ru/ntc/management/?ELEMENT_ID=748">О.С. Малютину</a> за предоставленные данные.<a href="#fnref1" class="footnote-back">↩︎</a></p></li>
+</ol>
+</div>

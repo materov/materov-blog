@@ -1,0 +1,341 @@
+---
+title: Прогнозирование гибели на пожарах на основе алгоритма бэггинга
+author: admin
+date: '2021-02-14'
+slug: classification
+categories: ["R"]
+tags: ["rstats", "tidymodels", "машинное обучение"]
+subtitle: 'использование библиотеки `tidymodels` в задаче о классификации'
+summary: 'Статья показывает, как построить простейшую классификационную модель в `tidymodels` для предсказания гибели на пожарах :fire:.'
+authors: 
+- admin
+lastmod: '2021-02-14'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index.ru_files/header-attrs/header-attrs.js"></script>
+<script src="{{< blogdown/postref >}}index.ru_files/clipboard/clipboard.min.js"></script>
+<link href="{{< blogdown/postref >}}index.ru_files/primer-tooltips/build.css" rel="stylesheet" />
+<link href="{{< blogdown/postref >}}index.ru_files/klippy/css/klippy.min.css" rel="stylesheet" />
+<script src="{{< blogdown/postref >}}index.ru_files/klippy/js/klippy.min.js"></script>
+
+
+<p>В языке <strong>R</strong> существует множество различных библиотек для работы с алгоритмами машинного обучения. Это и <a href="https://mlr3.mlr-org.com/">mlr3</a> и <a href="https://cran.r-project.org/web/packages/caret/vignettes/caret.html">caret</a>, однако в последнее время большое развитие получила мета-библиотека <code>tidymodels</code>, использующая современный подход с использованием принципов <code>tidyverse</code>.</p>
+<p>Фреймворк <code>tidymodels</code> представляет собой интегрированный, модульный, расширяемый набор библиотек, облегчающий создание предикативных стохастических моделей на основе принципов машинного обучения. Эти библиотеки придерживаются принципов синтаксиса и дизайна <code>tidyverse</code>, что способствует согласованности при пошаговом написании кода. Они автоматически строят параллельное выполнение для таких задач, как повторная выборка, перекрестная проверка и настройка параметров. Более того, библиотеки <code>tidymodels</code> не просто прорабатывают этапы базового рабочего процесса моделирования, они реализуют концептуальные структуры, которые делают сложные итерационные рабочие процессы возможными и воспроизводимыми. Мы используем подход <a href="https://juliasilge.com/">Julia Silge</a> для моделирования признака гибели на пожарах с помощью алгоритма бэггинга.</p>
+<div id="установка-библиотеки" class="section level1">
+<h1>Установка библиотеки</h1>
+<p>Стабильную версию библиотеки можно установить из репозитория <a href="https://cran.r-project.org/web/packages/modeltime/index.html">CRAN</a>:</p>
+<pre class="r"><code>install.packages(&quot;tidymodels&quot;)</code></pre>
+<p>Девелоперская версия доступна на <a href="https://cran.r-project.org/web/packages/tidymodels/index.html">GitHub</a>:</p>
+<pre class="r"><code>devtools::install_github(&quot;tidymodels/tidymodels&quot;)</code></pre>
+<p>Вот некоторые основные библиотеки, входящие в ядро <code>tidymodels</code>:</p>
+<ul>
+<li><a href="https://broom.tidymodels.org/"><code>broom</code></a> – приводит вывод встроенных функций <strong>R</strong> в <em>опрятный</em> (<em>tidy</em>) вид фрейма данных;</li>
+<li><a href="https://parsnip.tidymodels.org/"><code>parnip</code></a> – инерфейс для создания моделей;</li>
+<li><a href="https://recipes.tidymodels.org/"><code>recipes</code></a> – это общий препроцессор данных с современным интерфейсом, который может создавать матрицы моделей, включающие в себя проектирование объектов и другие вспомогательные инструменты;</li>
+<li><a href="https://rsample.tidymodels.org/"><code>rsample</code></a> – имеет инфраструктуру для повторной выборки данных, чтобы модели могли быть оценены и эмпирически подтверждены;</li>
+<li><a href="https://tune.tidymodels.org/"><code>tune</code></a> – содержит функции оптимизации гиперпараметров модели;</li>
+<li><a href="https://workflows.tidymodels.org/"><code>workflows</code></a> – содержит методы для объединения этапов предварительной обработки и моделей в единый объект;</li>
+<li><a href="https://yardstick.tidymodels.org/"><code>yardstick</code></a> – содержит инструменты для оценки моделей.</li>
+</ul>
+<p>На <a href="https://www.tidymodels.org/start/">сайте</a> <code>tidymodels</code> представлено хорошее введение в библиотеку, кроме того, работе с <code>tidymodels</code> посвящена книга [<a href="https://www.tmwr.org/">Kuhn &amp; Silge</a>], а также блог <a href="https://juliasilge.com/">Julia Silge</a>.</p>
+</div>
+<div id="исходные-данные" class="section level1">
+<h1>Исходные данные</h1>
+<p>Подключим необходимые библиотеки.</p>
+<script>
+  addClassKlippyTo("pre.r, pre.markdown");
+  addKlippy('left', 'top', 'auto', '1', 'Copy code', 'Copied!');
+</script>
+<pre class="r"><code>library(tidyverse)
+library(magrittr)
+
+library(themis)</code></pre>
+<p>Данные, которые используются в этой статье, представляют собой электронные карточки учета пожаров<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a> по пожарам в Красноярском крае в 2019 году<a href="#fn2" class="footnote-ref" id="fnref2"><sup>2</sup></a>.</p>
+<pre class="r"><code>library(RCurl)
+
+GitHubURL &lt;- &quot;https://raw.githubusercontent.com/materov/blog_data/main/data_fire.csv&quot;
+fire &lt;- readr::read_csv(GitHubURL)
+
+fire &lt;-
+fire %&gt;% 
+  mutate_if(is.character, factor) %&gt;%
+  mutate_if(is.numeric, as.integer)</code></pre>
+<p>Строки таблицы данных соответствуют одному наблюдению, а переменные-столбцы – поля карточки учета пожаров.</p>
+<pre class="r"><code>fire</code></pre>
+<pre><code>## # A tibble: 12,477 x 45
+##       X1 F1    F2       F3 F4    F5         F6    F7    F8    F9    F10   F11  
+##    &lt;int&gt; &lt;fct&gt; &lt;fct&gt; &lt;int&gt; &lt;fct&gt; &lt;date&gt;     &lt;fct&gt; &lt;fct&gt; &lt;fct&gt; &lt;fct&gt; &lt;fct&gt; &lt;fct&gt;
+##  1     1 Крас… Крас…  1869 осно… 2019-07-12 Город ГПС:… Муни… Унит… орга… Жило…
+##  2     2 Крас… Крас…  1870 осно… 2019-06-29 Город ГПС:… Част… форм… орга… Жило…
+##  3     3 Крас… Крас…  1871 осно… 2019-07-12 Город ГПС:… Муни… Унит… орга… Проч…
+##  4     4 Крас… Крас…  1872 осно… 2019-07-12 Город ГПС:… Муни… Унит… орга… Проч…
+##  5     5 Крас… Крас…  1873 осно… 2019-07-13 Город ГПС:… Муни… Унит… орга… Проч…
+##  6     6 Крас… Крас…  1874 осно… 2019-07-13 Город ГПС:… Муни… Унит… орга… Проч…
+##  7     7 Крас… Крас…  1875 осно… 2019-07-13 Город ГПС:… Муни… Унит… орга… Проч…
+##  8     8 Крас… Крас…  1876 осно… 2019-07-13 Город ГПС:… Муни… Унит… орга… Проч…
+##  9     9 Крас… Крас…  1877 осно… 2019-07-13 Город ГПС:… Част… форм… орга… Вид …
+## 10    10 Крас… Крас…  1878 осно… 2019-07-13 Город ГПС:… Муни… Унит… орга… Проч…
+## # … with 12,467 more rows, and 33 more variables: F12 &lt;fct&gt;, F13 &lt;fct&gt;,
+## #   F14 &lt;int&gt;, F15 &lt;int&gt;, F16 &lt;fct&gt;, F17 &lt;fct&gt;, F17A &lt;fct&gt;, F18 &lt;fct&gt;,
+## #   F19 &lt;fct&gt;, F20 &lt;fct&gt;, F21 &lt;fct&gt;, F22 &lt;fct&gt;, F23 &lt;int&gt;, F27 &lt;int&gt;,
+## #   F28 &lt;int&gt;, F29 &lt;int&gt;, F30 &lt;int&gt;, F31 &lt;int&gt;, F32 &lt;int&gt;, F56 &lt;int&gt;,
+## #   F75 &lt;fct&gt;, F112 &lt;int&gt;, F113 &lt;int&gt;, F114 &lt;int&gt;, F115 &lt;int&gt;, F116 &lt;int&gt;,
+## #   F78 &lt;fct&gt;, F79 &lt;fct&gt;, F80 &lt;fct&gt;, F81 &lt;fct&gt;, F82 &lt;fct&gt;, F148 &lt;fct&gt;,
+## #   F149 &lt;fct&gt;</code></pre>
+<p>Например, заголовок <code>F12</code> отвечает за <em>вид объекта пожара</em>, <code>F17</code> – <em>место возникновения пожара</em>, <code>F27</code> – <em>количество погибших на пожаре</em>, и т.д. Удалим из рассмотрения некоторые строки, относящиеся к горению мусора.</p>
+<pre class="r"><code># исключаемые категории вида объекта пожара
+F12_exclude &lt;- c(&quot;Сухая трава (сено, камыш и т.д.)&quot;, 
+                 &quot;Мусор вне территории жилой зоны и предприятия, организации, учреждения&quot;,
+                 &quot;Мусор на территории жилой зоны (кроме территории домовладения)&quot;)
+
+# исключаемые категории места возникновения пожара
+F17_exclude &lt;- c(&quot;Полоса отчуждения, обочина дороги, луг, пустырь&quot;,
+                 &quot;Прочее место на открытой территории&quot;,
+                 &quot;Площадка для мусора на территории жилой зоны&quot;)
+
+&#39;%!in%&#39; &lt;- function(x,y)!(&#39;%in%&#39;(x,y))
+
+fire &lt;- fire %&gt;% 
+  filter(F12  %!in% F12_exclude,
+         F17  %!in% F17_exclude)</code></pre>
+<p>Действительно, можно показать, что к указанным выше категориям не относится ни одного случая гибели, что не должно существенно повлиять на результат для нашей модели. Создадим новую переменную <code>died_cases</code> для классификации погибших.</p>
+<pre class="r"><code>fire &lt;- fire %&gt;% mutate(
+  died_cases = case_when(F27 &gt; 0 ~ &quot;died&quot;, 
+                         TRUE    ~ &quot;not_died&quot;)
+)
+
+fire &lt;- fire %&gt;% select(-F27)</code></pre>
+<p>Следующая таблица показывает процент погибших на пожарах.</p>
+<pre class="r"><code>fire %&gt;% 
+  janitor::tabyl(died_cases) %&gt;%
+  janitor::adorn_pct_formatting(digits = 1) %&gt;% 
+  purrr::set_names(&quot;категория&quot;, &quot;количество&quot;, &quot;процент&quot;)</code></pre>
+<pre><code>##  категория количество процент
+##       died        172    3.1%
+##   not_died       5395   96.9%</code></pre>
+<p>Изменение процента гибели с течением времени можно оценить следующим образом.</p>
+<pre class="r"><code>fire %&gt;%
+  mutate(fire_date = lubridate::floor_date(F5, unit = &quot;week&quot;)) %&gt;%
+  count(fire_date, died_cases) %&gt;%
+  group_by(fire_date) %&gt;%
+  mutate(percent_died = n / sum(n)) %&gt;%
+  ungroup() %&gt;%
+  filter(died_cases == &quot;died&quot;) %&gt;%
+  ggplot(aes(fire_date, percent_died)) +
+  geom_line(size = 1, alpha = 0.7, color = &quot;midnightblue&quot;) +
+  scale_y_continuous(limits = c(0, NA), 
+                     labels = scales::percent_format()) +
+  labs(x = NULL, y = &quot;процент пожаров с гибелью людей\n&quot;)</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-7"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-7-1.png" alt="*Изменение процента гибели людей на пожарах*" width="768" />
+<p class="caption">
+Рисунок 1: <em>Изменение процента гибели людей на пожарах</em>
+</p>
+</div>
+<p>Выберем переменные, которые войдут в нашу модель кроме классифицирующей переменной:</p>
+<pre class="r"><code>fire &lt;- fire %&gt;% select(F5, F6, F12, F17, F17A, F18, F19, F22, died_cases)</code></pre>
+<table>
+<colgroup>
+<col width="5%" />
+<col width="94%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">имя</th>
+<th align="left">значение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">F5</td>
+<td align="left">дата пожара</td>
+</tr>
+<tr class="even">
+<td align="left">F6</td>
+<td align="left">вид населенного пункта</td>
+</tr>
+<tr class="odd">
+<td align="left">F12</td>
+<td align="left">вид объекта пожара</td>
+</tr>
+<tr class="even">
+<td align="left">F17</td>
+<td align="left">место возникновения пожара</td>
+</tr>
+<tr class="odd">
+<td align="left">F17A</td>
+<td align="left">строительная конструкция (конструктивный элемент)</td>
+</tr>
+<tr class="even">
+<td align="left">F18</td>
+<td align="left">изделие, устройство (источник зажигания, от которого непосредственно возник пожар)</td>
+</tr>
+<tr class="odd">
+<td align="left">F19</td>
+<td align="left">причина пожара</td>
+</tr>
+<tr class="even">
+<td align="left">F22</td>
+<td align="left">состояние виновника пожара</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="построение-модели" class="section level1">
+<h1>Построение модели</h1>
+<p>Начнем с разделения данных на обучающую и тестовую выборки и стратификации для перекрестной проверки.</p>
+<pre class="r"><code>library(tidymodels)
+
+set.seed(123)
+fire_split &lt;- initial_split(fire, strata = died_cases)
+fire_train &lt;- training(fire_split)
+fire_test  &lt;- testing(fire_split)
+
+set.seed(123)
+fire_folds &lt;- vfold_cv(fire_train, strata = died_cases)
+fire_folds</code></pre>
+<pre><code>## #  10-fold cross-validation using stratification 
+## # A tibble: 10 x 2
+##    splits             id    
+##    &lt;list&gt;             &lt;chr&gt; 
+##  1 &lt;split [3.8K/418]&gt; Fold01
+##  2 &lt;split [3.8K/418]&gt; Fold02
+##  3 &lt;split [3.8K/418]&gt; Fold03
+##  4 &lt;split [3.8K/418]&gt; Fold04
+##  5 &lt;split [3.8K/418]&gt; Fold05
+##  6 &lt;split [3.8K/418]&gt; Fold06
+##  7 &lt;split [3.8K/417]&gt; Fold07
+##  8 &lt;split [3.8K/417]&gt; Fold08
+##  9 &lt;split [3.8K/417]&gt; Fold09
+## 10 &lt;split [3.8K/417]&gt; Fold10</code></pre>
+<p>Теперь построим модель используя процедуру <em>бэггинга</em> (сокр. от <strong>b</strong>ootstrap <strong>agg</strong>regat<strong>ing</strong>). Идея бэггинга хорошо описана в книге [<a href="https://ranalytics.github.io/data-mining/044-Ensembles.html">Шитиков В. К., Мастицкий С. Э.</a>]: мы строим деревья решений по обучающим бутсреп-выборкам и дальнейшем усреднении коллективного прогноза, что позволяет уменьшить дисперсию прогноза.</p>
+<p>Мы создадим <em>рецепт</em>, в который войдут:</p>
+<ul>
+<li>базовая формула, показывающая что <code>died_cases</code> будет зависеть от всех остальных переменных;</li>
+<li>создание определяющих параметров, начинающихся с <code>step_*()</code>, в частности, для переменной даты, номинальных переменных и понижающей дискретизации <code>step_downsample()</code> для учета классового дисбаланса (процент гибели, как мы видели, невысок).</li>
+</ul>
+<pre class="r"><code>fire_rec &lt;- recipe(died_cases ~ ., data = fire) %&gt;%
+  step_date(F5) %&gt;%
+  step_rm(F5) %&gt;%
+  step_dummy(all_nominal(), -died_cases) %&gt;%
+  step_downsample(died_cases)</code></pre>
+<p>Следующий шаг – непосредственное <em>определение модели</em> (здесь <em>bagging tree</em>).</p>
+<pre class="r"><code>bag_spec &lt;- baguette::bag_tree(min_n = 10) %&gt;%
+  set_engine(&quot;rpart&quot;, times = 20) %&gt;%
+  set_mode(&quot;classification&quot;)</code></pre>
+<blockquote>
+<p>Для бинарной классификации можно использовать и другие модели, например, как на <a href="https://parsnip.tidymodels.org/reference/decision_tree.html">странице</a> библиотеки <code>parsnip</code>.</p>
+</blockquote>
+<p><em>Рабочий процесс</em> – это объект, который может объединять запросы предварительной обработки, моделирования и последующей обработки. Преимущества рабочего процесса заключаются в следующем:</p>
+<ul>
+<li>Вам не нужно следить за отдельными объектами в вашем рабочем пространстве.</li>
+<li>Подготовка <em>рецепта</em> и <em>подгонка модели</em> могут быть выполнены с помощью одного вызова функции <code>fit()</code>.</li>
+<li>Если у вас есть пользовательские настройки параметров настройки, они могут быть определены с помощью более простого интерфейса в сочетании с настройкой.</li>
+<li>В рабочие процессы можно добавлять операции постобработки, такие как изменение отсечки вероятности для моделей двух классов.</li>
+</ul>
+<pre class="r"><code>fire_wf &lt;- workflow() %&gt;%
+  add_recipe(fire_rec) %&gt;%
+  add_model(bag_spec)
+
+fire_wf</code></pre>
+<pre><code>## ══ Workflow ════════════════════════════════════════════════════════════════════
+## Preprocessor: Recipe
+## Model: bag_tree()
+## 
+## ── Preprocessor ────────────────────────────────────────────────────────────────
+## 4 Recipe Steps
+## 
+## ● step_date()
+## ● step_rm()
+## ● step_dummy()
+## ● step_downsample()
+## 
+## ── Model ───────────────────────────────────────────────────────────────────────
+## Bagged Decision Tree Model Specification (classification)
+## 
+## Main Arguments:
+##   cost_complexity = 0
+##   min_n = 10
+## 
+## Engine-Specific Arguments:
+##   times = 20
+## 
+## Computational engine: rpart</code></pre>
+<p>Теперь проверим эту модель на повторных выборках перекрестной проверки, чтобы понять, насколько хорошо она будет работать.</p>
+<pre class="r"><code>doParallel::registerDoParallel()
+fire_res &lt;- fit_resamples(
+  fire_wf,
+  fire_folds,
+  control = control_resamples(save_pred = TRUE)
+)</code></pre>
+</div>
+<div id="оценка-модели" class="section level1">
+<h1>Оценка модели</h1>
+<p>Для оценки производительности модели служит функция <code>metrics()</code>, информация которая важна для нас, – показатель <strong>ROC AUC</strong> (чем ближе к 1, тем лучше):</p>
+<pre class="r"><code>collect_metrics(fire_res)</code></pre>
+<pre><code>## # A tibble: 2 x 6
+##   .metric  .estimator  mean     n std_err .config             
+##   &lt;chr&gt;    &lt;chr&gt;      &lt;dbl&gt; &lt;int&gt;   &lt;dbl&gt; &lt;fct&gt;               
+## 1 accuracy binary     0.748    10 0.00772 Preprocessor1_Model1
+## 2 roc_auc  binary     0.800    10 0.0163  Preprocessor1_Model1</code></pre>
+<p>После обзора предварительной оценки модели, мы <em>подгоним</em> модель, распространив ее на все обучающее множество и рассмотрим значения на тестовом множестве.</p>
+<pre class="r"><code>fire_fit &lt;- last_fit(fire_wf, fire_split)
+collect_metrics(fire_fit)</code></pre>
+<pre><code>## # A tibble: 2 x 4
+##   .metric  .estimator .estimate .config             
+##   &lt;chr&gt;    &lt;chr&gt;          &lt;dbl&gt; &lt;fct&gt;               
+## 1 accuracy binary         0.735 Preprocessor1_Model1
+## 2 roc_auc  binary         0.840 Preprocessor1_Model1</code></pre>
+<p>Произведем оценку значимости признаков.</p>
+<pre class="r"><code>fire_imp &lt;- fire_fit$.workflow[[1]] %&gt;%
+  pull_workflow_fit()
+
+fire_imp$fit$imp %&gt;%
+  slice_max(value, n = 7) %&gt;%
+  ggplot(aes(value, fct_reorder(term, value))) +
+  geom_col(alpha = 0.8, fill = &quot;midnightblue&quot;) +
+  labs(x = &quot;\nОценка важности признаков&quot;, y = NULL)</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-17"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-17-1.png" alt="*Оценка важности признаков*" width="672" />
+<p class="caption">
+Рисунок 2: <em>Оценка важности признаков</em>
+</p>
+</div>
+<p>Построим ROC кривую для оценки модели.</p>
+<pre class="r"><code>fire_fit %&gt;% 
+  collect_predictions() %&gt;%
+  roc_curve(died_cases, .pred_died) %&gt;%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(size = 1.5, color = &quot;midnightblue&quot;) +
+  geom_abline(
+    lty   = 2, 
+    alpha = 0.5,
+    color = &quot;gray50&quot;,
+    size  = 1.2
+  ) +
+  coord_equal()</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-18"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/unnamed-chunk-18-1.png" alt="*ROC-кривая модели*" width="672" />
+<p class="caption">
+Рисунок 3: <em>ROC-кривая модели</em>
+</p>
+</div>
+</div>
+<div id="заключение" class="section level1">
+<h1>Заключение</h1>
+<p>Мы рассмотрели простейшую модель для определения погибших на пожаре, определили наиболее важные ее параметры и оценили с помощью ROC-кривой. Кроме того, мы рассмотрели основные принципы построения моделей в <code>tidymodels</code>.</p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Приказ МЧС России от 24 декабря 2018 № 625 <strong>О формировании электронных баз данных учета пожаров и их последствий</strong>.<a href="#fnref1" class="footnote-back">↩︎</a></p></li>
+<li id="fn2"><p>Автор выражает благодарность <a href="https://icm.krasn.ru/personal.php?persid=207">В.В. Ничепорчуку</a> за предоставленные данные.<a href="#fnref2" class="footnote-back">↩︎</a></p></li>
+</ol>
+</div>

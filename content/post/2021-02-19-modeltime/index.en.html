@@ -1,0 +1,556 @@
+---
+title: Использование машинного обучения для анализа временных рядов
+author: admin
+date: '2021-01-09'
+slug: modeltime
+categories: ["R"]
+tags: ["rstats", "временные ряды", "машинное обучение"]
+subtitle: 'прогнозирование временных рядов с помощью одновременного использования нескольких моделей в языке программирования R'
+summary: 'В статье сделан обзор работы с библиотекой `modeltime`, которая использует машинное обучение для моделирования и прогнозирования временных рядов.'
+authors: 
+- admin
+lastmod: '2021-01-17'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index.en_files/header-attrs/header-attrs.js"></script>
+
+
+<p>Под временным рядом обычно понимается последовательность {<span class="math inline">\(y_t\)</span>}, элементы которой принимают значения через определенные (обычно регулярные) значения времени <span class="math inline">\(t\)</span>. Область применения временных рядов очень обширна, временные ряды используются в сейсмологии, метеорологии, экономике, при регистрации значений любых датчиков. Временным рядам посвящено большое количество литературы, в частности, работа с временными рядами в среде <strong>R</strong> описана в монографиях [<a href="https://www.stat.pitt.edu/stoffer/tsa4/">Shumway &amp; Stoffer</a>], [<a href="https://otexts.com/fpp2/">Hyndman &amp; Athanasopoulos</a>] и [<a href="https://ranalytics.github.io/tsa-with-r/">Мастицкий</a>].</p>
+<p>В нашем случае, в качестве временных рядов рассматривается, например, количество пожаров, регистрируемых в сутки/неделю/месяц или уровень воды в реках. Мы покажем применение достаточно новой библиотеки <code>modeltime</code> для моделирования временных рядов с помощью методов машинного обучения. Основные преимущества данной библиотеки:</p>
+<ul>
+<li>использование современных алогритмов машинного обучения;</li>
+<li>комбинирование нескольких алгоритмов для улучшения результата;</li>
+<li>работа с несколькими моделями одновременно;</li>
+<li>настройка гиперпараметров моделей.</li>
+</ul>
+<p>Библиотека <code>modeltime</code> интегрирована с библиотекой <code>tidymodels</code>, что позволяет рассматривать ее в рамках единой экосистемы алгоритмов машинного обучения, основанной на принципах <em>tidy data</em>. Узнать больше о библиотеке <code>tidymodels</code> можно на <a href="https://www.tidymodels.org/">сайте библиотеки</a> и из новой книги [<a href="https://www.tmwr.org/">Kuhn &amp; Silge</a>].</p>
+<div id="установка-библиотеки" class="section level1">
+<h1>Установка библиотеки</h1>
+<p>Стабильную версию библиотеки можно установить из репозитория <a href="https://cran.r-project.org/web/packages/modeltime/index.html">CRAN</a>
+соответствующей командой:</p>
+<pre class="r"><code>install.packages(&quot;modeltime&quot;)</code></pre>
+<p>Девелоперская версия доступна на <a href="https://business-science.github.io/modeltime/">GitHub</a>:</p>
+<pre class="r"><code>remotes::install_github(&quot;business-science/modeltime&quot;)</code></pre>
+</div>
+<div id="исходные-данные" class="section level1">
+<h1>Исходные данные</h1>
+<p>Подключим небходимые библиотеки.</p>
+<pre class="r"><code>library(readxl)
+library(magrittr)
+library(tidyverse)
+library(lubridate)
+
+library(tidymodels)
+library(modeltime)
+library(timetk)</code></pre>
+<p>Рассмотрим фондовые данные по гидрологии в Российской Федерации :ru: за 2008-2015 года<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>. Загрузим данные с <strong>GitHub</strong>:</p>
+<pre class="r"><code>url &lt;- &quot;https://raw.githubusercontent.com/materov/blog_data/main/df_hydro.csv&quot;
+
+df_hydro &lt;- readr::read_csv(url)</code></pre>
+<p>Исходные данные содержат 615 849 записей и имеют две переменных: <code>date</code> и <code>level</code>, отвечающих за дату наблюдения и уровень воды воды в метрах над нулем графика поста.</p>
+<pre class="r"><code>df_hydro</code></pre>
+<pre><code>## # A tibble: 615,849 x 2
+##    date                level
+##    &lt;dttm&gt;              &lt;dbl&gt;
+##  1 2013-10-11 00:00:00   626
+##  2 2013-11-11 00:00:00   642
+##  3 2013-12-11 00:00:00   615
+##  4 2013-01-12 00:00:00   549
+##  5 2013-02-12 00:00:00   543
+##  6 2013-03-12 00:00:00   542
+##  7 2013-04-12 00:00:00   541
+##  8 2013-05-12 00:00:00   705
+##  9 2013-06-12 00:00:00   916
+## 10 2013-07-12 00:00:00   653
+## # … with 615,839 more rows</code></pre>
+<p>Сформируем данные для временного ряда: рассмотрим максимальные значения уровня воды.</p>
+<pre class="r"><code>fire_time_series_tbl &lt;-
+df_hydro %&gt;% 
+  group_by(date) %&gt;% 
+  summarise(value = max(level)) </code></pre>
+<p>Преобразуем <code>date</code> в формат даты:</p>
+<pre class="r"><code>fire_time_series_tbl$date %&lt;&gt;% as.Date()</code></pre>
+<p>Визуализируем получившийся временной ряд:</p>
+<pre class="r"><code>fire_time_series_tbl %&gt;% 
+  ggplot(aes(x = date, y = value)) + geom_line()</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-6"></span>
+<img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-6-1.png" alt="*Исходный временной ряд*" width="768" />
+<p class="caption">
+Рисунок 1: <em>Исходный временной ряд</em>
+</p>
+</div>
+<p>Из графика видно, что временной ряд имеет периодический характер.</p>
+</div>
+<div id="моделирование-временных-рядов" class="section level1">
+<h1>Моделирование временных рядов</h1>
+<p>Весь поток операций в <code>modeltime</code> можно разбить на следующие 6 шагов, позволяющих выполнить:</p>
+<ol style="list-style-type: decimal">
+<li>Сбор данных и разделение их на обучающую и тестовую выборки.</li>
+<li>Создание и подгонку <strong>нескольких моделей</strong>.</li>
+<li>Добавление подогнанных моделей в <em>таблицы моделей</em>.</li>
+<li>Калибровка моделей на тестовое множество.</li>
+<li>Выполнение прогноза для тестового множества и оценка точности.</li>
+<li><em>Корректировку моделей</em> на полный набор данных и прогнозирование на будущие значения.</li>
+</ol>
+<p>Кратко покажем реализацию этих шагов. Ниже показана иллюстрация оптимизированного рабочего процесса, рассмотренная на сайте библиотеки.</p>
+<div class="figure">
+<img src="modeltime_workflow.jpg" alt="" />
+<p class="caption">Иллюстрация оптимизированного рабочего процесса прогнозирования временного ряда</p>
+</div>
+<p><em>Шаг 1.</em> Разбиение на обучающую и тестовую выборку можно делать либо указав временной параметр, либо процентные соотношения.</p>
+<pre class="r"><code># Разделение выборки на обучающую и тестовую ---------------------------------
+
+# разбиение в соотношении 90% / 10%
+splits &lt;- fire_time_series_tbl %&gt;%  
+  rsample::initial_time_split(prop = 0.9)
+
+# альтернативный вариант
+# splits &lt;- fire_time_series_tbl %&gt;%
+#   time_series_split(assess     = &quot;2 months&quot;, 
+#                     cumulative = TRUE)</code></pre>
+<pre class="r"><code>splits %&gt;%
+  tk_time_series_cv_plan() %&gt;%
+  plot_time_series_cv_plan(date, value, 
+                           .interactive = FALSE) +
+  labs(title = &quot;Разделение временного ряда на обучающую и тестовую выборку&quot;,
+       subtitle = &quot;в качестве тестовой выборки рассмотрены 10% данных&quot;,
+       color = &quot;Выборка:&quot;) +
+  scale_x_date(date_breaks = &quot;12 months&quot;,
+               date_labels = &quot;%Y&quot;)</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-8"></span>
+<img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-8-1.png" alt="*Пример разделения временного ряда на обучающую и тестовую выборку*" width="768" />
+<p class="caption">
+Рисунок 2: <em>Пример разделения временного ряда на обучающую и тестовую выборку</em>
+</p>
+</div>
+<p><em>Шаг 2.</em> Следующим этапом является создание и подгонка моделей. Ключевая особенность <code>modeltime</code> заключается в возможности <em>работы с несколькими моделями одновременно</em>. Это позволяет сравнивать модели, выбирая наилучшие результаты.
+Вот некоторые стандартные модели встроенные в <code>modeltime</code> (полный список моделей, который постоянно дополняется, можно получить на <a href="https://business-science.github.io/modeltime/articles/modeltime-model-list.html">сайте библиотеки</a>):</p>
+<ul>
+<li><strong>ARIMA</strong>;</li>
+<li>линейная регрессия;</li>
+<li>экспоненциальное сглаживание;</li>
+<li><strong>Prophet</strong>;</li>
+<li><strong>MARS</strong> (<em>Multivariate Adaptive Regression Splines</em>);</li>
+<li><strong>Elastic Nets</strong>;</li>
+<li><strong>Random Forest</strong>.</li>
+</ul>
+<p>Отметим, что <code>modeltime</code> позволяет комбинировать алгоритмы, улучшая их, например, в модели <strong>Prophet</strong> можно улучшить ошибки, используя известный алгоритм машинного обучения <strong>XGBoost</strong>, что дает новую модель, которая называется <strong>Prophet Boost</strong>.</p>
+<p>Модели машинного обучения более сложны, чем автоматизированные модели. Эта сложность обычно требует <em>рабочего процесса</em> (иногда называемого <em>конвейером</em> в других языках программирования). Общий процесс протекает следующим образом:</p>
+<ul>
+<li>Создание типа модели, так называемого <strong>рецепта</strong> (recipe) предварительной обработки используя <code>tidymodels</code>.</li>
+<li>Создание спецификаций модели.</li>
+<li>Использование рабочего процесса для объединения спецификаций модели, предобработки и подходящей модели.</li>
+</ul>
+<p>Построим несколько моделей для данного временного ряда.</p>
+<ol style="list-style-type: decimal">
+<li>Линейная регрессия</li>
+</ol>
+<pre class="r"><code># Создание и подгонка нескольких моделей -------------------------------------
+
+# Модель 1: lm ----
+# Линейная регрессия
+model_fit_lm &lt;- linear_reg() %&gt;%
+  set_engine(&quot;lm&quot;) %&gt;%
+  fit(value ~ as.numeric(date) + factor(month(date), ordered = FALSE),
+      data = training(splits))</code></pre>
+<ol start="2" style="list-style-type: decimal">
+<li>Классическая модель <strong>ARIMA</strong> с автоопределением параметров</li>
+</ol>
+<pre class="r"><code># Модель 2: auto_arima ----
+# ARIMA
+model_fit_arima &lt;- arima_reg() %&gt;%
+  set_engine(engine = &quot;auto_arima&quot;) %&gt;%
+  fit(value ~ date, data = training(splits))</code></pre>
+<ol start="3" style="list-style-type: decimal">
+<li>Модель <strong>ARIMA Boost</strong></li>
+</ol>
+<pre class="r"><code># Модель 3: arima_boost ----
+# ARIMA с бустингом (уменьшение ошибок с помощью XGBoost)
+model_fit_arima_boosted &lt;- arima_boost(
+  min_n = 2,
+  learn_rate = 0.015) %&gt;%
+  set_engine(engine = &quot;auto_arima_xgboost&quot;) %&gt;%
+  fit(value ~ date + as.numeric(date) + 
+        factor(month(date), ordered = F),
+      data = training(splits))</code></pre>
+<ol start="4" style="list-style-type: decimal">
+<li>Модель <strong>ETS</strong></li>
+</ol>
+<pre class="r"><code># Модель 4: ets ----
+# экспоненциальное сглаживание
+model_fit_ets &lt;- exp_smoothing() %&gt;%
+  set_engine(engine = &quot;ets&quot;) %&gt;%
+  fit(value ~ date, data = training(splits))</code></pre>
+<ol start="5" style="list-style-type: decimal">
+<li>Модель <strong>Prophet</strong></li>
+</ol>
+<pre class="r"><code># Модель 5: prophet ----
+# Prophet от Facebook
+model_fit_prophet &lt;- prophet_reg() %&gt;%
+  set_engine(&quot;prophet&quot;, 
+             yearly.seasonality = TRUE) %&gt;%
+  fit(value ~ date, training(splits))</code></pre>
+<ol start="6" style="list-style-type: decimal">
+<li>Модель <strong>MARS</strong></li>
+</ol>
+<pre class="r"><code># Модель 6: MARS ----
+# Пример &quot;рецепта&quot; предобработки
+recipe_spec &lt;- recipe(value ~ date, data = training(splits)) %&gt;%
+  step_date(date, features = &quot;month&quot;, ordinal = FALSE) %&gt;%
+  step_mutate(date_num = as.numeric(date)) %&gt;%
+  step_normalize(date_num) %&gt;%
+  step_rm(date)</code></pre>
+<pre class="r"><code># вид &quot;рецепта&quot;
+recipe_spec %&gt;% prep() %&gt;% juice()</code></pre>
+<pre><code>## # A tibble: 2,629 x 3
+##    value date_month date_num
+##    &lt;dbl&gt; &lt;fct&gt;         &lt;dbl&gt;
+##  1   973 янв           -1.73
+##  2   971 янв           -1.73
+##  3   969 янв           -1.73
+##  4   968 янв           -1.73
+##  5   969 янв           -1.73
+##  6   968 янв           -1.72
+##  7   966 янв           -1.72
+##  8   965 янв           -1.72
+##  9   963 янв           -1.72
+## 10   962 янв           -1.72
+## # … with 2,619 more rows</code></pre>
+<pre class="r"><code># спецификации модели MARS (Computational engine: earth)
+model_spec_mars &lt;- mars(mode = &quot;regression&quot;) %&gt;%
+  set_engine(&quot;earth&quot;)</code></pre>
+<pre class="r"><code># собираем модель MARS
+workflow_fit_mars &lt;- workflow()  %&gt;%
+  add_recipe(recipe_spec)    %&gt;%
+  add_model(model_spec_mars) %&gt;%
+  fit(training(splits))</code></pre>
+<ol start="7" style="list-style-type: decimal">
+<li>Модель <strong>Prophet Boost</strong></li>
+</ol>
+<pre class="r"><code># Модель 7: Prophet Boost ----
+# рецепт
+recipe_spec &lt;- recipe(value ~ date, training(splits)) %&gt;%
+  step_timeseries_signature(date) %&gt;%
+  step_rm(contains(&quot;am.pm&quot;), contains(&quot;hour&quot;), contains(&quot;minute&quot;),
+          contains(&quot;second&quot;), contains(&quot;xts&quot;)) %&gt;%
+  step_fourier(date, period = 365, K = 5) %&gt;%
+  step_dummy(all_nominal())</code></pre>
+<pre class="r"><code># спецификации
+model_spec_prophet_boost &lt;- prophet_boost() %&gt;%
+  set_engine(&quot;prophet_xgboost&quot;, yearly.seasonality = TRUE)</code></pre>
+<pre class="r"><code># сборка модели
+workflow_fit_prophet_boost &lt;- workflow() %&gt;%
+  add_model(model_spec_prophet_boost)    %&gt;%
+  add_recipe(recipe_spec)                %&gt;%
+  fit(training(splits))</code></pre>
+<ol start="8" style="list-style-type: decimal">
+<li>Модель <strong>glmnet</strong></li>
+</ol>
+<pre class="r"><code># Модель 8: glmnet ----
+# recipe
+recipe_spec &lt;- recipe(value ~ date, training(splits)) %&gt;%
+  step_timeseries_signature(date) %&gt;%
+  step_rm(contains(&quot;am.pm&quot;), contains(&quot;hour&quot;), contains(&quot;minute&quot;),
+          contains(&quot;second&quot;), contains(&quot;xts&quot;)) %&gt;%
+  step_fourier(date, period = 365, K = 5) %&gt;%
+  step_dummy(all_nominal())</code></pre>
+<pre class="r"><code># просмотр &quot;рецепта&quot;
+recipe_spec %&gt;% prep() %&gt;% juice()</code></pre>
+<pre><code>## # A tibble: 2,629 x 47
+##    date       value date_index.num date_year date_year.iso date_half
+##    &lt;date&gt;     &lt;dbl&gt;          &lt;dbl&gt;     &lt;int&gt;         &lt;int&gt;     &lt;int&gt;
+##  1 2008-01-01   973     1199145600      2008          2008         1
+##  2 2008-01-02   971     1199232000      2008          2008         1
+##  3 2008-01-03   969     1199318400      2008          2008         1
+##  4 2008-01-04   968     1199404800      2008          2008         1
+##  5 2008-01-05   969     1199491200      2008          2008         1
+##  6 2008-01-06   968     1199577600      2008          2008         1
+##  7 2008-01-07   966     1199664000      2008          2008         1
+##  8 2008-01-08   965     1199750400      2008          2008         1
+##  9 2008-01-09   963     1199836800      2008          2008         1
+## 10 2008-01-10   962     1199923200      2008          2008         1
+## # … with 2,619 more rows, and 41 more variables: date_quarter &lt;int&gt;,
+## #   date_month &lt;int&gt;, date_day &lt;int&gt;, date_wday &lt;int&gt;, date_mday &lt;int&gt;,
+## #   date_qday &lt;int&gt;, date_yday &lt;int&gt;, date_mweek &lt;int&gt;, date_week &lt;int&gt;,
+## #   date_week.iso &lt;int&gt;, date_week2 &lt;int&gt;, date_week3 &lt;int&gt;, date_week4 &lt;int&gt;,
+## #   date_mday7 &lt;int&gt;, date_sin365_K1 &lt;dbl&gt;, date_cos365_K1 &lt;dbl&gt;,
+## #   date_sin365_K2 &lt;dbl&gt;, date_cos365_K2 &lt;dbl&gt;, date_sin365_K3 &lt;dbl&gt;,
+## #   date_cos365_K3 &lt;dbl&gt;, date_sin365_K4 &lt;dbl&gt;, date_cos365_K4 &lt;dbl&gt;,
+## #   date_sin365_K5 &lt;dbl&gt;, date_cos365_K5 &lt;dbl&gt;, date_month.lbl_01 &lt;dbl&gt;,
+## #   date_month.lbl_02 &lt;dbl&gt;, date_month.lbl_03 &lt;dbl&gt;, date_month.lbl_04 &lt;dbl&gt;,
+## #   date_month.lbl_05 &lt;dbl&gt;, date_month.lbl_06 &lt;dbl&gt;, date_month.lbl_07 &lt;dbl&gt;,
+## #   date_month.lbl_08 &lt;dbl&gt;, date_month.lbl_09 &lt;dbl&gt;, date_month.lbl_10 &lt;dbl&gt;,
+## #   date_month.lbl_11 &lt;dbl&gt;, date_wday.lbl_1 &lt;dbl&gt;, date_wday.lbl_2 &lt;dbl&gt;,
+## #   date_wday.lbl_3 &lt;dbl&gt;, date_wday.lbl_4 &lt;dbl&gt;, date_wday.lbl_5 &lt;dbl&gt;,
+## #   date_wday.lbl_6 &lt;dbl&gt;</code></pre>
+<pre class="r"><code># спецификация модели
+model_spec_glmnet &lt;- linear_reg(penalty = 0.01, mixture = 0.5) %&gt;%
+  set_engine(&quot;glmnet&quot;)</code></pre>
+<pre class="r"><code># сборка модели glmnet
+workflow_fit_glmnet &lt;- workflow() %&gt;%
+  add_model(model_spec_glmnet) %&gt;%
+  add_recipe(recipe_spec %&gt;% step_rm(date)) %&gt;%
+  fit(training(splits))</code></pre>
+<ol start="9" style="list-style-type: decimal">
+<li>Модель <strong>Random Forest</strong></li>
+</ol>
+<pre class="r"><code># Модель 9: Random Forest ----
+model_spec_rf &lt;- rand_forest(trees = 500, min_n = 50) %&gt;%
+  set_engine(&quot;randomForest&quot;)</code></pre>
+<pre class="r"><code># сборка модели Random Forest
+workflow_fit_rf &lt;- workflow() %&gt;%
+  add_model(model_spec_rf) %&gt;%
+  add_recipe(recipe_spec %&gt;% step_rm(date)) %&gt;%
+  fit(training(splits))</code></pre>
+<p><em>Шаг 3.</em> Модели прописываются и добавляются в единую <em>таблицу моделей</em>, в которой до включения можно настраивать параметры, а затем проходит их подгонка/масштабирование, проверка на соответствие и калибровка по отношению к тестовой выборке. Далее происходит оценка качества моделей на тестовой выборке используя различные показатели точности:</p>
+<ul>
+<li>MAE – средняя абсолютная ошибка;</li>
+<li>MAPE – средняя абсолютная процентная ошибка;</li>
+<li>MASE – средняя абсолютная нормированная ошибка;</li>
+<li>SMAPE – симметричная средняя абсолютная процентная ошибка;</li>
+<li>RMSE – среднеквадратическая ошибка;</li>
+<li>RSQ – показатель <span class="math inline">\(R^2\)</span>.</li>
+</ul>
+<pre class="r"><code># Добавление подогнанных моделей в таблицы моделей ------------------------
+
+models_tbl &lt;- modeltime_table(
+    model_fit_lm,
+    model_fit_arima,
+    model_fit_arima_boosted,
+    model_fit_ets,
+    model_fit_prophet,
+    # модели машинного обучения
+    workflow_fit_mars,
+    workflow_fit_prophet_boost,
+    workflow_fit_glmnet,
+    workflow_fit_rf
+)</code></pre>
+<pre class="r"><code># просмотр таблицы моделей
+models_tbl</code></pre>
+<pre><code>## # Modeltime Table
+## # A tibble: 9 x 3
+##   .model_id .model     .model_desc                                      
+##       &lt;int&gt; &lt;list&gt;     &lt;chr&gt;                                            
+## 1         1 &lt;fit[+]&gt;   LM                                               
+## 2         2 &lt;fit[+]&gt;   ARIMA(5,0,4) WITH NON-ZERO MEAN                  
+## 3         3 &lt;fit[+]&gt;   ARIMA(4,0,5) WITH NON-ZERO MEAN W/ XGBOOST ERRORS
+## 4         4 &lt;fit[+]&gt;   ETS(M,AD,N)                                      
+## 5         5 &lt;fit[+]&gt;   PROPHET                                          
+## 6         6 &lt;workflow&gt; EARTH                                            
+## 7         7 &lt;workflow&gt; PROPHET W/ XGBOOST ERRORS                        
+## 8         8 &lt;workflow&gt; GLMNET                                           
+## 9         9 &lt;workflow&gt; RANDOMFOREST</code></pre>
+<p><em>Шаг 4.</em> <em>Калибровка</em>, по сути, – это способ определения доверительных интервалов и метрик точности, при этом калибровочные данные – это спрогнозированные значения и невязки, которые вычисляются на основе данных вне выборки.</p>
+<pre class="r"><code># Калибровка --------------------------------------------------------------
+
+calibration_tbl &lt;- models_tbl %&gt;%
+  modeltime_calibrate(new_data = testing(splits))</code></pre>
+<pre class="r"><code># таблица калиброванных моделей
+# добавились .type и .calibration_data
+calibration_tbl</code></pre>
+<pre><code>## # Modeltime Table
+## # A tibble: 9 x 5
+##   .model_id .model    .model_desc                        .type .calibration_data
+##       &lt;int&gt; &lt;list&gt;    &lt;chr&gt;                              &lt;chr&gt; &lt;list&gt;           
+## 1         1 &lt;fit[+]&gt;  LM                                 Test  &lt;tibble [293 × 4…
+## 2         2 &lt;fit[+]&gt;  ARIMA(5,0,4) WITH NON-ZERO MEAN    Test  &lt;tibble [293 × 4…
+## 3         3 &lt;fit[+]&gt;  ARIMA(4,0,5) WITH NON-ZERO MEAN W… Test  &lt;tibble [293 × 4…
+## 4         4 &lt;fit[+]&gt;  ETS(M,AD,N)                        Test  &lt;tibble [293 × 4…
+## 5         5 &lt;fit[+]&gt;  PROPHET                            Test  &lt;tibble [293 × 4…
+## 6         6 &lt;workflo… EARTH                              Test  &lt;tibble [293 × 4…
+## 7         7 &lt;workflo… PROPHET W/ XGBOOST ERRORS          Test  &lt;tibble [293 × 4…
+## 8         8 &lt;workflo… GLMNET                             Test  &lt;tibble [293 × 4…
+## 9         9 &lt;workflo… RANDOMFOREST                       Test  &lt;tibble [293 × 4…</code></pre>
+<p><em>Шаг 5.</em> Сформированные модели проверяются на тестовых данных и визуализируются.</p>
+<pre class="r"><code>calibration_tbl %&gt;%
+  modeltime_forecast(new_data    = testing(splits), 
+                     actual_data = fire_time_series_tbl) %&gt;%
+  filter(.index &gt; &quot;2012-01-01&quot;) %&gt;% 
+  plot_modeltime_forecast(.interactive = F) +
+  labs(color = &quot;Модели:&quot;,
+       title = &quot;Прогнозирование временного ряда на тестовую выборку&quot;) + 
+  guides(color = guide_legend(ncol = 3))</code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-31"></span>
+<img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-31-1.png" alt="*Пример прогнозирования временного ряда на тестовую выборку*" width="768" />
+<p class="caption">
+Рисунок 3: <em>Пример прогнозирования временного ряда на тестовую выборку</em>
+</p>
+</div>
+<p>Также, составляется таблица ошибок, использующая рассмотренные выше показатели точности, пример такого рода таблицы показан ниже.</p>
+<pre class="r"><code># таблица ошибок
+calibration_tbl %&gt;%
+  modeltime_accuracy() %&gt;%
+  table_modeltime_accuracy(.interactive = F) </code></pre>
+<table style="width:100%;">
+<colgroup>
+<col width="9%" />
+<col width="48%" />
+<col width="5%" />
+<col width="6%" />
+<col width="5%" />
+<col width="5%" />
+<col width="5%" />
+<col width="6%" />
+<col width="4%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="right">.model_id</th>
+<th align="left">.model_desc</th>
+<th align="left">.type</th>
+<th align="right">mae</th>
+<th align="right">mape</th>
+<th align="right">mase</th>
+<th align="right">smape</th>
+<th align="right">rmse</th>
+<th align="right">rsq</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">1</td>
+<td align="left">LM</td>
+<td align="left">Test</td>
+<td align="right">134.13</td>
+<td align="right">9.46</td>
+<td align="right">7.12</td>
+<td align="right">9.50</td>
+<td align="right">232.13</td>
+<td align="right">0.68</td>
+</tr>
+<tr class="even">
+<td align="right">2</td>
+<td align="left">ARIMA(5,0,4) WITH NON-ZERO MEAN</td>
+<td align="left">Test</td>
+<td align="right">233.95</td>
+<td align="right">16.09</td>
+<td align="right">12.42</td>
+<td align="right">17.72</td>
+<td align="right">406.55</td>
+<td align="right">0.02</td>
+</tr>
+<tr class="odd">
+<td align="right">3</td>
+<td align="left">ARIMA(4,0,5) WITH NON-ZERO MEAN W/ XGBOOST ERRORS</td>
+<td align="left">Test</td>
+<td align="right">235.84</td>
+<td align="right">16.42</td>
+<td align="right">12.52</td>
+<td align="right">17.91</td>
+<td align="right">403.69</td>
+<td align="right">0.02</td>
+</tr>
+<tr class="even">
+<td align="right">4</td>
+<td align="left">ETS(M,AD,N)</td>
+<td align="left">Test</td>
+<td align="right">325.55</td>
+<td align="right">22.08</td>
+<td align="right">17.28</td>
+<td align="right">27.24</td>
+<td align="right">514.37</td>
+<td align="right">0.02</td>
+</tr>
+<tr class="odd">
+<td align="right">5</td>
+<td align="left">PROPHET</td>
+<td align="left">Test</td>
+<td align="right">148.64</td>
+<td align="right">13.76</td>
+<td align="right">7.89</td>
+<td align="right">12.76</td>
+<td align="right">166.18</td>
+<td align="right">0.94</td>
+</tr>
+<tr class="even">
+<td align="right">6</td>
+<td align="left">EARTH</td>
+<td align="left">Test</td>
+<td align="right">344.41</td>
+<td align="right">29.04</td>
+<td align="right">18.29</td>
+<td align="right">35.21</td>
+<td align="right">399.23</td>
+<td align="right">0.61</td>
+</tr>
+<tr class="odd">
+<td align="right">7</td>
+<td align="left">PROPHET W/ XGBOOST ERRORS</td>
+<td align="left">Test</td>
+<td align="right">74.83</td>
+<td align="right">5.79</td>
+<td align="right">3.97</td>
+<td align="right">5.75</td>
+<td align="right">117.65</td>
+<td align="right">0.94</td>
+</tr>
+<tr class="even">
+<td align="right">8</td>
+<td align="left">GLMNET</td>
+<td align="left">Test</td>
+<td align="right">92.95</td>
+<td align="right">6.89</td>
+<td align="right">4.94</td>
+<td align="right">7.02</td>
+<td align="right">148.54</td>
+<td align="right">0.89</td>
+</tr>
+<tr class="odd">
+<td align="right">9</td>
+<td align="left">RANDOMFOREST</td>
+<td align="left">Test</td>
+<td align="right">108.05</td>
+<td align="right">8.14</td>
+<td align="right">5.74</td>
+<td align="right">7.77</td>
+<td align="right">180.18</td>
+<td align="right">0.81</td>
+</tr>
+</tbody>
+</table>
+<p><em>Шаг 6.</em> Заключительный этап состоит в том, чтобы скорректировать модели, распространить их на полный набор данных и спрогнозировать будущие значения.</p>
+<p>{{% callout note %}}
+Как видно из предыдущего шага, не все модели в нашем случае имеют достаточно хорошие показатели ошибок (в частности, коэффициент детерминации должен быть близок к единице, остальные показатели должны быть чем меньше, тем лучше), модели 1-4 и 6 можно удалить из-за низкой точности.
+{{% /callout %}}</p>
+<pre class="r"><code>refit_tbl &lt;- calibration_tbl %&gt;%
+  filter(.model_id != 1) %&gt;%
+  filter(.model_id != 2) %&gt;%
+  filter(.model_id != 3) %&gt;%
+  filter(.model_id != 4) %&gt;%
+  filter(.model_id != 6) %&gt;%
+  modeltime_refit(data = fire_time_series_tbl)</code></pre>
+<p>Визуализируем прогноз на 1 год вперед.</p>
+<pre class="r"><code>refit_tbl %&gt;%
+  modeltime_forecast(h = &quot;1 year&quot;, actual_data = fire_time_series_tbl) %&gt;% 
+  filter(.index &gt; &quot;2014-01-01&quot;) %&gt;% 
+  plot_modeltime_forecast(.interactive = FALSE) +
+  labs(title    = &quot;Скорректированный прогноз для различных моделей&quot;,
+       subtitle = &quot;прогноз на 1 год вперед&quot;,
+       color    = &quot;Модели:&quot;) + 
+  scale_x_date(date_breaks = &quot;1 year&quot;,
+               date_labels = &quot;%Y&quot;) </code></pre>
+<div class="figure"><span id="fig:unnamed-chunk-34"></span>
+<img src="{{< blogdown/postref >}}index.en_files/figure-html/unnamed-chunk-34-1.png" alt="*Прогноз временного ряда с использованием нескольких моделей*" width="768" />
+<p class="caption">
+Рисунок 4: <em>Прогноз временного ряда с использованием нескольких моделей</em>
+</p>
+</div>
+</div>
+<div id="заключение" class="section level1">
+<h1>Заключение</h1>
+<p>Мы рассмотрели методы прогнозирования временных рядов на основе современных алгоритмов машинного обучения для составления гидрологического прогноза, что публикуется впервые в применении в вопросам природной и техносферной безопасности. Используя возможности языка программирования <strong>R</strong> можно не только разрабатывать модели прогнозирования, но и в последующем делать на их основе актуальные аналитические веб-сервисы на основе <strong>R Markdown</strong> и <strong>Shiny</strong> для практического применения прогнозов, что представляется перспективным направлением.</p>
+<p>Отметим, что для улучшения точности прогноза сильно неструктурированных данных, например, при отсутствии явно выраженных сезонных компонент, можно использовать для моделирования нейронные (как правило, RNN, LSTM или CNN) сети, однако это выходит за рамки настоящей статьи, и обучение нейронной сети, – процесс гораздо более трудоемкий, чем рассмотренное в работе моделирование, что может оказаться неэффективным с точки зрения временных затрат.</p>
+</div>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>Автор выражает благодарность <a href="https://icm.krasn.ru/personal.php?persid=207">В.В. Ничепорчуку</a> за предоставленные данные.<a href="#fnref1" class="footnote-back">↩︎</a></p></li>
+</ol>
+</div>

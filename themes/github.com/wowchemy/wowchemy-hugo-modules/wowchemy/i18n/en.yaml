@@ -1,0 +1,257 @@
+# Navigation
+
+- id: toggle_navigation
+  translation: Переключить навигацию
+
+- id: table_of_contents
+  translation: Содержание
+
+- id: on_this_page
+  translation: На этой странице
+
+- id: back_to_top
+  translation: Наверх
+
+- id: home
+  translation: На домашнюю страницу
+
+- id: close
+  translation: Похожие
+
+- id: languages
+  translation: Языки
+
+# General
+
+- id: related
+  translation: Похожие
+
+- id: minute_read
+  translation: мин. для прочтения
+
+- id: previous
+  translation: Предыдущий
+
+- id: next
+  translation: Дальше
+
+- id: figure
+  translation: 'Рисунок %d:'
+
+- id: edit_page
+  translation: Редактировать страницу
+
+# Themes
+
+- id: theme_selector
+  translation: Показать предпочтения
+
+- id: theme_light
+  translation: Светлая тема
+
+- id: theme_dark
+  translation: Темная тема
+
+- id: theme_auto
+  translation: Автоматически
+
+# Buttons
+
+- id: btn_preprint
+  translation: Предварительная печать
+
+- id: btn_pdf
+  translation: PDF
+
+- id: btn_cite
+  translation: Процитировать (BibTeX)
+
+- id: btn_slides
+  translation: Презентации
+
+- id: btn_video
+  translation: Видео
+
+- id: btn_code
+  translation: Ссылка
+
+- id: btn_dataset
+  translation: Набор данных
+
+- id: btn_project
+  translation: Проект
+
+- id: btn_poster
+  translation: Постер
+
+- id: btn_source
+  translation: Исходный документ
+
+- id: btn_copy
+  translation: Копия
+
+- id: btn_download
+  translation: Загрузить
+
+# About widget
+
+- id: interests
+  translation: Область интересов
+
+- id: education
+  translation: Образование
+
+- id: user_profile_latest
+  translation: Профиль пользователя
+
+# Accomplishments widget
+
+- id: see_certificate
+  translation: Посмотреть сертификат
+
+# Experience widget
+
+- id: present
+  translation: В настоящее время
+
+# Pages widget
+
+- id: more_pages
+  translation: Посмотреть все
+
+- id: more_posts
+  translation: Больше статей
+
+- id: more_talks
+  translation: Больше докладов
+
+- id: more_publications
+  translation: Больше публикаций
+
+# Contact widget
+
+- id: contact_name
+  translation: Имя
+
+- id: contact_email
+  translation: Адрес электронной почты
+
+- id: contact_message
+  translation: Сообщение
+
+- id: contact_send
+  translation: Отправить
+
+- id: book_appointment
+  translation: Назначить встречу
+
+# Publication/Event details
+
+- id: abstract
+  translation: Аннотация
+
+- id: publication
+  translation: Публикация
+
+- id: publication_type
+  translation: Тип публикации
+
+- id: date
+  translation: Дата
+
+- id: last_updated
+  translation: Обновлено
+
+- id: event
+  translation: Событие
+
+- id: location
+  translation: Место
+
+- id: pub_uncat
+  translation: Без категории
+
+- id: pub_conf
+  translation: Тезисы конференции
+
+- id: pub_journal
+  translation: Статья в периодическом издании
+
+- id: pub_preprint
+  translation: Препринт
+
+- id: pub_report
+  translation: Доклад
+
+- id: pub_book
+  translation: Книга
+
+- id: pub_book_section
+  translation: Глава книги
+
+- id: pub_thesis
+  translation: Диссертация
+
+- id: pub_patent
+  translation: Патент
+
+# Project details
+
+- id: open_project_site
+  translation: Перейти на сайт проекта
+
+# Content types for default archive page titles and search results
+
+- id: posts
+  translation: Статьи
+
+- id: publications
+  translation: Публикации
+
+- id: talks
+  translation: Выступления
+
+- id: projects
+  translation: Проекты
+
+- id: slides
+  translation: Презентации
+  
+- id: authors
+  translation: Аввторы
+
+# Search
+
+- id: search
+  translation: Поиск
+
+- id: search_placeholder
+  translation: Поиск...
+
+- id: search_results
+  translation: результат найден
+
+- id: search_no_results
+  translation: Результат найден
+
+- id: search_common_queries
+  translation: Совместный поиск
+
+# Error 404
+
+- id: page_not_found
+  translation: Страница не найдена
+
+- id: 404_recommendations
+  translation: Вы искали что-то из этого?
+
+# Cookie consent
+
+- id: cookie_message
+  translation: Для комфорной навигации на этом сайте используются куки (cookies).
+
+- id: cookie_dismiss
+  translation: Понял!
+
+- id: cookie_learn
+  translation: Узнать больше
