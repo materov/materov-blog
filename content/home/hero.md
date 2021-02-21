@@ -3,7 +3,7 @@ widget: hero
 headless: true
 weight: 10
 title: О сайте
-hero_media: pi2.png
+hero_media: bigdata.jpg
 cta:
   label: '**Перейти к блогу**'
   url: "#posts"
