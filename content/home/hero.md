@@ -6,10 +6,10 @@ title: О сайте
 hero_media: pi2.png
 cta:
   label: '**Перейти к блогу**'
-  url: https://materov-blog.netlify.app/#posts
+  url: "#posts"
 cta_alt:
   label: Оставить комментарий
-  url: https://materov-blog.netlify.app/#contact
+  url: "#contact"
 cta_note:
   label: >-
     
