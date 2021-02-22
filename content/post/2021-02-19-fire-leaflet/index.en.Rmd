@@ -32,6 +32,7 @@ library(leaflet)
 
 library(htmlwidgets)
 library(htmltools)
+library(widgetframe)
 
 url <- getURL("https://raw.githubusercontent.com/materov/blog_data/main/fire_NSK.csv")
 fire <- read.csv(text = url)
@@ -55,12 +56,11 @@ BasicMap <- leaflet(fire_geo) %>%
   clusterOptions = markerClusterOptions()
 ) 
 
-saveWidget(BasicMap, "BasicMap.html")
+#saveWidget(BasicMap, "BasicMap.html")
 
+frameWidget(BasicMap)
 ```
 
-
-<iframe seamless src="BasicMap.html" width="100%" height="600"></iframe>
 
 Мы воспроизведем карту выше, а также рассмотрим некоторые другие особенности Leaflet.
 
@@ -120,11 +120,10 @@ ZeroMap <- leaflet(fire_geo) %>%
   setView(lng = lng_center, lat = lat_center, zoom = 11)  %>% 
   addTiles() 
 
-saveWidget(ZeroMap, "ZeroMap.html")
+#saveWidget(ZeroMap, "ZeroMap.html")
+frameWidget(ZeroMap)
 
 ```
-
-<iframe seamless src="ZeroMap.html" width="100%" height="600"></iframe>
 
 # Нанесение данных на карту
 
@@ -153,10 +152,10 @@ AddMarkersMap <- fire %>%
   addTiles() %>% 
   addMarkers()
 
-saveWidget(AddMarkersMap, "AddMarkersMap.html")
+#saveWidget(AddMarkersMap, "AddMarkersMap.html")
+frameWidget(AddMarkersMap)
 ```
 
-<iframe seamless src="AddMarkersMap.html" width="100%" height="600"></iframe>
 
 ## Кластеры
 
@@ -179,10 +178,10 @@ AddClustersMap <- leaflet(fire_geo) %>%
   clusterOptions = markerClusterOptions()
 )
 
-saveWidget(AddClustersMap, "AddClustersMap.html")
+#saveWidget(AddClustersMap, "AddClustersMap.html")
+frameWidget(AddClustersMap)
 ```
 
-<iframe seamless src="AddClustersMap.html" width="100%" height="600"></iframe>
 
 По сути, наша карта готова. Тем не менее, ее можно улучшить, рассмотрев дополнительные возможности, предоставляемые Leaflet.
 
@@ -195,7 +194,6 @@ leaflet() %>%
   setView(lng = lng_center, lat = lat_center, zoom = 11) %>% 
   addTiles() %>% 
   addProviderTiles(providers$OpenFireMap)
-) 
 ```
 
 ![Пример слоя OpenFireMap](OpenFireMap.png)
@@ -276,7 +274,7 @@ icons <- awesomeIcons(
 )
 
 AddAwesomeMarkers <- leaflet() %>%
-  setView(lng = 82.86, lat = 55, zoom = 13) %>% 
+  setView(lng = 82.86, lat = 54.98, zoom = 13) %>% 
   addTiles() %>% 
   addAwesomeMarkers(data = fire_0 %>% 
                     filter(OBJECT_CATEGORIE == "Транспортные средства"),
@@ -285,10 +283,10 @@ AddAwesomeMarkers <- leaflet() %>%
                     icon = icons
   )
 
-saveWidget(AddAwesomeMarkers, "AddAwesomeMarkers.html")
+#saveWidget(AddAwesomeMarkers, "AddAwesomeMarkers.html")
+frameWidget(AddAwesomeMarkers)
 ```
 
-<iframe seamless src="AddAwesomeMarkers.html" width="100%" height="600"></iframe>
 
 Как говорилось ранее, маркеры можно представлять и в виде кругов. 
 Применим эту возможность для отображения площади пожаров, подобрав при этом радиус окружности маркера так, чтобы он в некотором масштабе соответствовал площади возгорания.
@@ -314,10 +312,9 @@ SquareMarkers <-
     radius = 5.3*log10(fire$SQUARE_LOC),
     stroke = FALSE, fillOpacity = 0.4
   )
-saveWidget(SquareMarkers, "SquareMarkers.html")
+#saveWidget(SquareMarkers, "SquareMarkers.html")
+frameWidget(SquareMarkers)
 ```
-
-<iframe seamless src="SquareMarkers.html" width="100%" height="600"></iframe>
 
 ## Интерактиваная легенда
 
@@ -411,94 +408,17 @@ Add_Legend <-
   hideGroup("Транспортные средства") %>% 
   hideGroup("Надворные постройки")
 
-saveWidget(Add_Legend, "Add_Legend.html")
+#saveWidget(Add_Legend, "Add_Legend.html")
+#<iframe src="Add_Legend.html" width="100%" height="600"></iframe>
+
+frameWidget(Add_Legend)
 ```
 
-<iframe seamless src="Add_Legend.html" width="100%" height="600"></iframe>
 
-## Использование Crosstalk
 
-Предыдущая карта содержит легенду, способную взаимодействовать с картой. 
-Несмотря на это, в карте отсутствует динамическая фильтрация данных. Включить ее в полной мере можно, например, с помощью [Shiny](https://shiny.rstudio.com/) -- инструмента создания интерактивных веб-приложений. 
-
-Разработанное в Shiny приложение может запускаться на исполнение с сервера:
-
-- со специального облачного сервера [shinyapps.io](https://www.shinyapps.io/);
-- выполняться на локальном сервере пользователя; 
-- выполняться на платном сервере RStudio.
-
-Использование сервера не всегда удобно, и написание приложений в Shiny требует специальных навыков. Другой способ введения интерактивности, -- разработка приложений в  [Crosstalk](https://rstudio.github.io/crosstalk/using.html), который обладает меньшими возможностями, но не требует сервера. В качестве примера рассмотрим пожары в одноквартирных и многоквартирных жилых домах в период с 1 января 2020 года.
-
-Подготовим данные и сделаем карту в `crosstalk`.
-
-```r
-library(crosstalk)
-
-# подготовка данных
-fire_filtered <- fire %>% 
-  filter(OBJECT_CATEGORIE %in% c("Одноквартирный жилой дом",
-                                 "Многоквартирный жилой дом")) %>% 
-  filter(DATE_ZVK >= "2020-01-01") %>% 
-  rename(lat = "geo_lat", long = "geo_lon")
-
-shared_fire <- SharedData$new(fire_filtered)
-```
-
-```{r, warning=FALSE, message=FALSE, echo=FALSE}
-library(crosstalk)
-
-# подготовка данных
-fire_dated <- fire_0
-fire_dated$DATE_ZVK %<>% as.Date()
-
-fire_filtered <- fire_dated %>% 
-  filter(OBJECT_CATEGORIE %in% c("Одноквартирный жилой дом",
-                                 "Многоквартирный жилой дом")) %>% 
-  filter(DATE_ZVK >= "2020-01-01") %>% 
-  rename(lat = "geo_lat", long = "geo_lon")
-
-shared_fire <- SharedData$new(fire_filtered)
-```
-
-```r
-# отрисовка карты
-bscols(widths = c(2,NA, NA),
-       list(
-         filter_checkbox("OBJECT_CATEGORIE", "Категория объекта", 
-                         shared_fire, ~OBJECT_CATEGORIE, inline = F),
-         filter_slider("PRIB_TIME", "Время прибытия", 
-                       shared_fire, column = ~PRIB_TIME, step = 1, width = "100%") 
-       ),
-  leaflet(shared_fire, width = "100%", height = 600) %>% 
-    setView(lng = lng_center, lat = lat_center, zoom = 11) %>%
-    addTiles() %>% 
-    addMarkers()
-)
-```
-
-```{r, warning=FALSE, echo=FALSE, message=FALSE}
-Crosstalk_Map <-
-# отрисовка карты
-bscols(widths = c(3,NA),
-       list(
-         filter_checkbox("OBJECT_CATEGORIE", "Категория объекта", 
-                         shared_fire, ~OBJECT_CATEGORIE, inline = F),
-         filter_slider("PRIB_TIME", "Время прибытия", 
-                       shared_fire, column = ~PRIB_TIME, step = 1, width = "100%") 
-       ),
-  leaflet(shared_fire, width = "100%", height = 500) %>%  
-    setView(lng = lng_center, lat = lat_center, zoom = 11) %>%
-    addTiles() %>% 
-    addMarkers()
-)
-htmltools::save_html(Crosstalk_Map, "Crosstalk_Map.html")
-```
-
-<iframe seamless src="Crosstalk_Map.html" width="100%" height="600"></iframe>
 
 
 # Заключение
 
 Мы коснулись лишь небольшой части тех возможностей, которыми обладает библиотека Leaflet, однако даже те инструменты, обзор которых здесь представлен, позволяют существенно упростить визуализацию информации связанной с планированием предотвращения последствий различных чрезвычайных ситуаций.
-
 

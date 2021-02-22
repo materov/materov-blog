@@ -1,0 +1,79 @@
+## Использование Crosstalk
+
+Предыдущая карта содержит легенду, способную взаимодействовать с картой. 
+Несмотря на это, в карте отсутствует динамическая фильтрация данных. Включить ее в полной мере можно, например, с помощью [Shiny](https://shiny.rstudio.com/) -- инструмента создания интерактивных веб-приложений. 
+
+Разработанное в Shiny приложение может запускаться на исполнение с сервера:
+
+- со специального облачного сервера [shinyapps.io](https://www.shinyapps.io/);
+- выполняться на локальном сервере пользователя; 
+- выполняться на платном сервере RStudio.
+
+Использование сервера не всегда удобно, и написание приложений в Shiny требует специальных навыков. Другой способ введения интерактивности, -- разработка приложений в  [Crosstalk](https://rstudio.github.io/crosstalk/using.html), который обладает меньшими возможностями, но не требует сервера. В качестве примера рассмотрим пожары в одноквартирных и многоквартирных жилых домах в период с 1 января 2020 года.
+
+Подготовим данные и сделаем карту в `crosstalk`.
+
+```r
+library(crosstalk)
+
+# подготовка данных
+fire_filtered <- fire %>% 
+  filter(OBJECT_CATEGORIE %in% c("Одноквартирный жилой дом",
+                                 "Многоквартирный жилой дом")) %>% 
+  filter(DATE_ZVK >= "2020-01-01") %>% 
+  rename(lat = "geo_lat", long = "geo_lon")
+
+shared_fire <- SharedData$new(fire_filtered)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+library(crosstalk)
+
+# подготовка данных
+fire_dated <- fire_0
+fire_dated$DATE_ZVK %<>% as.Date()
+
+fire_filtered <- fire_dated %>% 
+  filter(OBJECT_CATEGORIE %in% c("Одноквартирный жилой дом",
+                                 "Многоквартирный жилой дом")) %>% 
+  filter(DATE_ZVK >= "2020-01-01") %>% 
+  rename(lat = "geo_lat", long = "geo_lon")
+
+shared_fire <- SharedData$new(fire_filtered)
+```
+
+```r
+# отрисовка карты
+bscols(widths = c(2,NA, NA),
+       list(
+         filter_checkbox("OBJECT_CATEGORIE", "Категория объекта", 
+                         shared_fire, ~OBJECT_CATEGORIE, inline = F),
+         filter_slider("PRIB_TIME", "Время прибытия", 
+                       shared_fire, column = ~PRIB_TIME, step = 1, width = "100%") 
+       ),
+  leaflet(shared_fire, width = "100%", height = 600) %>% 
+    setView(lng = lng_center, lat = lat_center, zoom = 11) %>%
+    addTiles() %>% 
+    addMarkers()
+)
+```
+
+```{r, warning=FALSE, echo=FALSE, message=FALSE}
+#Crosstalk_Map <-
+# отрисовка карты
+bscols(widths = c(3,NA),
+       list(
+         filter_checkbox("OBJECT_CATEGORIE", "Категория объекта", 
+                         shared_fire, ~OBJECT_CATEGORIE, inline = F),
+         filter_slider("PRIB_TIME", "Время прибытия", 
+                       shared_fire, column = ~PRIB_TIME, step = 1, width = "100%") 
+       ),
+  leaflet(shared_fire, width = "100%", height = 500) %>%  
+    setView(lng = lng_center, lat = lat_center, zoom = 11) %>%
+    addTiles() %>% 
+    addMarkers()
+)
+#htmltools::save_html(Crosstalk_Map, "Crosstalk_Map.html")
+
+#frameWidget(Crosstalk_Map)
+```
