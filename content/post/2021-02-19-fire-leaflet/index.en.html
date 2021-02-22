@@ -20,15 +20,17 @@ projects: []
 ---
 
 <script src="{{< blogdown/postref >}}index.en_files/header-attrs/header-attrs.js"></script>
-<script src="{{< blogdown/postref >}}index.en_files/htmlwidgets/htmlwidgets.js"></script>
-<script src="{{< blogdown/postref >}}index.en_files/pymjs/pym.v1.js"></script>
-<script src="{{< blogdown/postref >}}index.en_files/widgetframe-binding/widgetframe.js"></script>
 
 
 <p><a href="https://leafletjs.com/">Leaflet</a> является одной из самых популярных open-source библиотек на JavaScript для создания интерактивных карт. Соответствующая библиотека <a href="https://rstudio.github.io/leaflet/">Leaflet for R</a> позволяет легко интегрировать интерактивные карты Leaflet как HTML-виджеты. В продолжение <a href="https://materov-blog.netlify.app/post/geodata-fire/">предыдущей записи</a> в блоге по работе с геоданными в <strong>R</strong>, покажем, как можно быстро разработать интерактивную карту пожаров не прибегая при этом к средствам JavaScript.</p>
 <p>Пример Leaflet карты, иллюстрирующей пожары в Новосибирске за период с начала 2016 года по середину июля 2020 года, показан ниже. Для удобства отображения большого количества маркеров, отмечающих точки, где произошли пожары, смежные маркеры автоматически группируются в кластеры.</p>
-<div id="htmlwidget-1" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-1">{"x":{"url":"index.en_files/figure-html//widgets/widget_sample.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<script>
+  function resizeIframe(obj) {
+    obj.style.height = obj.contentWindow.document.body.scrollHeight + 'px';
+  }
+</script>
+<iframe src="BasicMap.html" width="100%" height="500px">
+</iframe>
 <p>Мы воспроизведем карту выше, а также рассмотрим некоторые другие особенности Leaflet.</p>
 <div id="исходные-данные" class="section level1">
 <h1>Исходные данные</h1>
@@ -90,8 +92,8 @@ lat_center &lt;- 55
 leaflet(fire_geo) %&gt;%
   setView(lng = lng_center, lat = lat_center, zoom = 11)  %&gt;% 
   addTiles()</code></pre>
-<div id="htmlwidget-2" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-2">{"x":{"url":"index.en_files/figure-html//widgets/widget_unnamed-chunk-3.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="ZeroMap.html" width="100%" height="500px">
+</iframe>
 </div>
 <div id="нанесение-данных-на-карту" class="section level1">
 <h1>Нанесение данных на карту</h1>
@@ -106,8 +108,8 @@ leaflet(fire_geo) %&gt;%
   setView(lng = lng_center, lat = lat_center, zoom = 11)  %&gt;% 
   addTiles() %&gt;% 
   addMarkers()</code></pre>
-<div id="htmlwidget-3" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-3">{"x":{"url":"index.en_files/figure-html//widgets/widget_unnamed-chunk-4.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="AddMarkersMap.html" width="100%" height="500px">
+</iframe>
 </div>
 <div id="кластеры" class="section level2">
 <h2>Кластеры</h2>
@@ -118,8 +120,8 @@ leaflet(fire_geo) %&gt;%
   addMarkers(
   clusterOptions = markerClusterOptions()
 )</code></pre>
-<div id="htmlwidget-4" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-4">{"x":{"url":"index.en_files/figure-html//widgets/widget_unnamed-chunk-5.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="AddClustersMap.html" width="100%" height="500px">
+</iframe>
 <p>По сути, наша карта готова. Тем не менее, ее можно улучшить, рассмотрев дополнительные возможности, предоставляемые Leaflet.</p>
 </div>
 <div id="слои-карт" class="section level2">
@@ -191,8 +193,8 @@ leaflet() %&gt;%
                     label = ~htmlEscape(ADDRES),
                     icon = icons
   )</code></pre>
-<div id="htmlwidget-5" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-5">{"x":{"url":"index.en_files/figure-html//widgets/widget_unnamed-chunk-7.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="AddAwesomeMarkers.html" width="100%" height="500px">
+</iframe>
 <p>Как говорилось ранее, маркеры можно представлять и в виде кругов.
 Применим эту возможность для отображения площади пожаров, подобрав при этом радиус окружности маркера так, чтобы он в некотором масштабе соответствовал площади возгорания.</p>
 <pre class="r"><code>leaflet() %&gt;%
@@ -203,8 +205,8 @@ leaflet() %&gt;%
     radius = 5*log10(fire$SQUARE_LOC),
     stroke = FALSE, fillOpacity = 0.4
   )</code></pre>
-<div id="htmlwidget-6" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-6">{"x":{"url":"index.en_files/figure-html//widgets/widget_unnamed-chunk-8.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="SquareMarkers.html" width="100%" height="500px">
+</iframe>
 </div>
 <div id="интерактиваная-легенда" class="section level2">
 <h2>Интерактиваная легенда</h2>
@@ -250,8 +252,8 @@ leaflet() %&gt;%
                    options = layersControlOptions(collapsed = FALSE)) %&gt;% 
   hideGroup(&quot;Транспортные средства&quot;) %&gt;% 
   hideGroup(&quot;Надворные постройки&quot;)</code></pre>
-<div id="htmlwidget-7" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-7">{"x":{"url":"index.en_files/figure-html//widgets/widget_unnamed-chunk-9.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="Add_Legend.html" width="100%" height="500px">
+</iframe>
 </div>
 </div>
 <div id="заключение" class="section level1">

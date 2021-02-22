@@ -24,6 +24,12 @@ projects: []
 
 Пример Leaflet карты, иллюстрирующей пожары в Новосибирске за период с начала 2016 года по середину июля 2020 года, показан ниже. Для удобства отображения большого количества маркеров, отмечающих точки, где произошли пожары, смежные маркеры автоматически группируются в кластеры.
 
+<script>
+  function resizeIframe(obj) {
+    obj.style.height = obj.contentWindow.document.body.scrollHeight + 'px';
+  }
+</script>
+
 ```{r sample, warning=FALSE, echo=FALSE, message=FALSE}
 library(tidyverse)
 library(magrittr)
@@ -38,7 +44,7 @@ url <- getURL("https://raw.githubusercontent.com/materov/blog_data/main/fire_NSK
 fire <- read.csv(text = url)
 
 fire %<>% na.omit()
-fire %<>% as_tibble()
+fire %<>% as.data.frame()
 
 
 fire_geo <-
@@ -49,18 +55,22 @@ fire_geo <-
 lng_center <- 82.9
 lat_center <- 55
 
-BasicMap <- leaflet(fire_geo) %>%
+BasicMap <- leaflet() %>%
   setView(lng = lng_center, lat = lat_center, zoom = 11) %>% 
   addTiles() %>% 
-  addMarkers(
+  addMarkers(data = fire_geo,
   clusterOptions = markerClusterOptions()
 ) 
 
-#saveWidget(BasicMap, "BasicMap.html")
+saveWidget(BasicMap, "BasicMap.html")
 
-frameWidget(BasicMap)
+#frameWidget(BasicMap)
 ```
 
+
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("BasicMap.html", height="500px")
+```
 
 Мы воспроизведем карту выше, а также рассмотрим некоторые другие особенности Leaflet.
 
@@ -120,9 +130,12 @@ ZeroMap <- leaflet(fire_geo) %>%
   setView(lng = lng_center, lat = lat_center, zoom = 11)  %>% 
   addTiles() 
 
-#saveWidget(ZeroMap, "ZeroMap.html")
-frameWidget(ZeroMap)
+saveWidget(ZeroMap, "ZeroMap.html")
+#frameWidget(ZeroMap)
+```
 
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("ZeroMap.html", height="500px")
 ```
 
 # Нанесение данных на карту
@@ -152,10 +165,13 @@ AddMarkersMap <- fire %>%
   addTiles() %>% 
   addMarkers()
 
-#saveWidget(AddMarkersMap, "AddMarkersMap.html")
-frameWidget(AddMarkersMap)
+saveWidget(AddMarkersMap, "AddMarkersMap.html")
+#frameWidget(AddMarkersMap)
 ```
 
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("AddMarkersMap.html", height="500px")
+```
 
 ## Кластеры
 
@@ -178,10 +194,13 @@ AddClustersMap <- leaflet(fire_geo) %>%
   clusterOptions = markerClusterOptions()
 )
 
-#saveWidget(AddClustersMap, "AddClustersMap.html")
-frameWidget(AddClustersMap)
+saveWidget(AddClustersMap, "AddClustersMap.html")
+#frameWidget(AddClustersMap)
 ```
 
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("AddClustersMap.html", height="500px")
+```
 
 По сути, наша карта готова. Тем не менее, ее можно улучшить, рассмотрев дополнительные возможности, предоставляемые Leaflet.
 
@@ -283,10 +302,13 @@ AddAwesomeMarkers <- leaflet() %>%
                     icon = icons
   )
 
-#saveWidget(AddAwesomeMarkers, "AddAwesomeMarkers.html")
-frameWidget(AddAwesomeMarkers)
+saveWidget(AddAwesomeMarkers, "AddAwesomeMarkers.html")
+#frameWidget(AddAwesomeMarkers)
 ```
 
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("AddAwesomeMarkers.html", height="500px")
+```
 
 Как говорилось ранее, маркеры можно представлять и в виде кругов. 
 Применим эту возможность для отображения площади пожаров, подобрав при этом радиус окружности маркера так, чтобы он в некотором масштабе соответствовал площади возгорания.
@@ -312,8 +334,12 @@ SquareMarkers <-
     radius = 5.3*log10(fire$SQUARE_LOC),
     stroke = FALSE, fillOpacity = 0.4
   )
-#saveWidget(SquareMarkers, "SquareMarkers.html")
-frameWidget(SquareMarkers)
+saveWidget(SquareMarkers, "SquareMarkers.html")
+#frameWidget(SquareMarkers)
+```
+
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("SquareMarkers.html", height="500px")
 ```
 
 ## Интерактиваная легенда
@@ -408,14 +434,16 @@ Add_Legend <-
   hideGroup("Транспортные средства") %>% 
   hideGroup("Надворные постройки")
 
-#saveWidget(Add_Legend, "Add_Legend.html")
+saveWidget(Add_Legend, "Add_Legend.html")
 #<iframe src="Add_Legend.html" width="100%" height="600"></iframe>
 
-frameWidget(Add_Legend)
+#frameWidget(Add_Legend)
 ```
 
 
-
+```{r, out.width="100%", echo=FALSE}
+knitr::include_url("Add_Legend.html", height="500px")
+```
 
 
 # Заключение
