@@ -20,8 +20,11 @@ projects: []
 ---
 
 <script src="{{< blogdown/postref >}}index.ru_files/header-attrs/header-attrs.js"></script>
+<link href="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.css" rel="stylesheet" />
+<script src="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.js"></script>
 
 
+<p><applause-button style="width: 58px; height: 58px;" color="#0C4047" multiclap="true"></applause-button></p>
 <p>Для работы с географическими данными в языке программирования <strong>R</strong> существует большое количество различных библиотек. Хорошим источником по анализу, визуализации и моделированию геоданных может служить книга <a href="https://geocompr.robinlovelace.net/">Geocomputation with R</a> или учебник <a href="https://tsamsonov.github.io/r-geo-course/index.html">Визуализация и анализ географических данных на языке R</a>.</p>
 <p>Замечательный сервис <a href="https://anvaka.github.io/city-roads/">city roads</a> позволяет по названию города отобразить карты дорог из <a href="https://www.openstreetmap.org/">OpenStreetMap</a> - свободно доступной базы данных всех местоположений в мире с открытой лицензией.</p>
 <div class="figure">
@@ -51,18 +54,18 @@ fire$DATE_ZVK %&lt;&gt;% as.Date()
 
 fire</code></pre>
 <pre><code>## # A tibble: 5,134 x 13
-##        X NOMER_ZVK DATE_ZVK   ADDRES RIDE_TYPE OBJECT_CATEGORIE geo_lon geo_lat
-##    &lt;int&gt;     &lt;int&gt; &lt;date&gt;     &lt;fct&gt;  &lt;fct&gt;     &lt;fct&gt;              &lt;dbl&gt;   &lt;dbl&gt;
-##  1     1   1600038 2016-01-01 ул. М… Тушение … Транспортные ср…    82.9    55.1
-##  2     2   1600071 2016-01-01 ул. Ш… Тушение … Многоквартирный…    83.1    54.9
-##  3     3   1600255 2016-01-02 ул. К… Тушение … Многоквартирный…    83.0    55.0
-##  4     5   1600287 2016-01-02 ул. Н… Тушение … Многоквартирный…    83.0    55.1
-##  5     6   1600319 2016-01-03 ул. Ф… Тушение … Здания производ…    82.9    55.0
-##  6     7   1600410 2016-01-03 ул. В… Тушение … Одноквартирный …    83.0    55.0
-##  7     8   1600412 2016-01-03 мрн. … Тушение … Многоквартирный…    82.9    55.0
-##  8     9   1600435 2016-01-04 ул. Ш… Тушение … Прочие обьекты …    82.9    55.0
-##  9    10   1600436 2016-01-04 ул. С… Тушение … Транспортные ср…    82.9    55.0
-## 10    11   1600440 2016-01-04 ул. В… Тушение … Транспортные ср…    83.0    55.0
+##        X NOMER_ZVK DATE_ZVK   ADDRES  RIDE_TYPE OBJECT_CATEGORIE geo_lon geo_lat
+##    &lt;int&gt;     &lt;int&gt; &lt;date&gt;     &lt;fct&gt;   &lt;fct&gt;     &lt;fct&gt;              &lt;dbl&gt;   &lt;dbl&gt;
+##  1     1   1600038 2016-01-01 ул. Мя… Тушение … Транспортные ср…    82.9    55.1
+##  2     2   1600071 2016-01-01 ул. Ша… Тушение … Многоквартирный…    83.1    54.9
+##  3     3   1600255 2016-01-02 ул. Ку… Тушение … Многоквартирный…    83.0    55.0
+##  4     5   1600287 2016-01-02 ул. Но… Тушение … Многоквартирный…    83.0    55.1
+##  5     6   1600319 2016-01-03 ул. Фа… Тушение … Здания производ…    82.9    55.0
+##  6     7   1600410 2016-01-03 ул. Вы… Тушение … Одноквартирный …    83.0    55.0
+##  7     8   1600412 2016-01-03 мрн. Г… Тушение … Многоквартирный…    82.9    55.0
+##  8     9   1600435 2016-01-04 ул. Шк… Тушение … Прочие обьекты …    82.9    55.0
+##  9    10   1600436 2016-01-04 ул. Си… Тушение … Транспортные ср…    82.9    55.0
+## 10    11   1600440 2016-01-04 ул. Вы… Тушение … Транспортные ср…    83.0    55.0
 ## # … with 5,124 more rows, and 5 more variables: PRIB_TIME &lt;int&gt;,
 ## #   LOC_TIME &lt;int&gt;, LPP_TIME &lt;int&gt;, SQUARE_LOC &lt;dbl&gt;, PERSONNEL &lt;dbl&gt;</code></pre>
 <p>Для дальнейшего анализа оставим только значимые переменные в таблице:</p>
