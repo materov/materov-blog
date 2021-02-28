@@ -12,6 +12,8 @@ paginate: 10
 enableEmoji: yes
 enableRobotsTXT: yes
 footnotereturnlinkcontents: <sup>^</sup>
+params:
+  commentsrepo: materov/blog-comments
 ignoreFiles: [
     "\\_reference-links.md$",
     "\\.Rmd$", 
