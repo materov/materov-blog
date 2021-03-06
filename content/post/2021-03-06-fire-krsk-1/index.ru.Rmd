@@ -1,0 +1,510 @@
+---
+title: Анализ пожаров Красноярского края за 2010-2020 года (1 часть)
+author: admin
+date: '2021-03-06'
+slug: fire-KRSK-1
+categories: ["R"]
+tags: ["rstats", "временные ряды"]
+subtitle: 'пример базового анализа данных по пожарам с использованием языка программирования R; данным сопоставляется временной ряд, исследуются: пропуски в заполнении исходных данных, периодические компоненты, тренд и аномалии временного ряда.'
+summary: 'В статье приводится анализ данных по пожарам в Красноярском крае за период, охватывающий последние 10 лет.'
+authors: 
+- admin
+lastmod: '2021-03-06T15:58:07+07:00'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+```{r applause-button, echo=FALSE}
+applause::button(
+  color = "#0C4047",
+  width = "58px",
+  multiclap = T
+)
+```
+
+
+```{r setup, include=FALSE, echo=FALSE, warning=FALSE}
+# чтение файлов excel
+library("readxl")
+# pipe
+library("magrittr")
+# %s+% оператор
+library(stringi)
+# весь tidiverse
+library(tidyverse)
+```
+
+# Исходные данные
+
+Рассмотрим данные по пожарам в Красноярском крае[^foot_KUP]. Основными переменными являются: **дата пожара** (переменная `f5`), **район края** (переменная `f2`) и **вид населенного пункта** (переменная `f6`). Каждая строка данных соответствует одному событию -- пожару.
+
+[^foot_KUP]: Данные электронных баз учета пожаров и их последствий соответствуют приказу МЧС России №625 от 24 декабря 2018.
+
+```{r warning=FALSE, message=FALSE, echo=FALSE}
+# чтение данных
+pozh_df <- read_csv("/Users/materov/Big Data МЧС/!Data_KRSK_scince_2010/krskData_f2_f6.csv")
+
+# классы пееременных
+pozh_df    %<>% as_tibble()
+pozh_df    %<>% mutate_if(is.character, factor)
+pozh_df$f5 %<>% as.Date()
+```
+
+```{r}
+pozh_df
+```
+
+
+Диапазон дат наших данных охватывает период с 2010 по 2020 года.
+
+```{r}
+range(pozh_df$f5)
+```
+
+Используя функцию `count()`, выделим районы с наибольшим количеством пожаров.
+
+```{r}
+count(pozh_df, f2, sort = T)
+```
+
+Наибольшее количество пожаров наблюдалось в городской черте.
+
+```{r}
+count(pozh_df, f6, sort = T)
+```
+
+Составим таблицу количества пожаров сразу по двум категориям: по районам края и видам населенных пунктов.
+
+```{r}
+count(pozh_df, f2, f6, sort = T)
+```
+
+Отобразим полученную табличную информацию графически, выделив только основные категории и упорядочив отдельные графики по убыванию. Оставим только категории с наибольшим количеством элементов, отнеся остальные категории в `другие` и организовав графики в виде матриц (используя так называемое *панелирование*). 
+
+```r
+library(tidytext)
+
+pozh_df %>%
+  # оставляем 4 значимых вида населенных пунктов
+  mutate(f6 = fct_lump(f6, 4, other_level = "другие населенные пункты")) %>% 
+  # оставляем максимум 25 значимых районов
+  mutate(f2 = fct_lump(f2, 10, other_level = "другие районы")) %>% 
+  count(f2, f6) %>% 
+  # упорядочиваем внутри каждой категории
+  mutate(f2 = reorder_within(f2, n, f6)) %>%
+  mutate(f6 = fct_reorder(f6, n, sum) %>% fct_rev()) %>%
+  # график
+  ggplot(aes(x = f2, y = n, fill = f6)) +
+  geom_col(show.legend = FALSE) +
+  # панели
+  facet_wrap(~f6, scales = "free", ncol = 2) +
+  coord_flip() +
+  scale_x_reordered() +
+  # разряды для тысяч
+  scale_y_continuous(expand = c(0,0), labels = function(x) format(x, big.mark = " ", scientific = FALSE)) +
+  labs(x = "", y = "")
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Количество пожаров по районам и видам населенных пунктов Красноярского края*", fig.height = 10, fig.width = 10.5}
+library(tidytext)
+
+pozh_df %>%
+  # оставляем 4 значимых вида населенных пунктов
+  mutate(f6 = fct_lump(f6, 4, other_level = "другие населенные пункты")) %>% 
+  # оставляем максимум 25 значимых районов
+  mutate(f2 = fct_lump(f2, 10, other_level = "другие районы")) %>% 
+  count(f2, f6) %>% 
+  # упорядочиваем внутри каждой категории
+  mutate(f2 = reorder_within(f2, n, f6)) %>%
+  mutate(f6 = fct_reorder(f6, n, sum) %>% fct_rev()) %>%
+  # график
+  ggplot(aes(x = f2, y = n, fill = f6)) +
+  geom_col(show.legend = FALSE) +
+  # панели
+  facet_wrap(~f6, scales = "free", ncol = 2) +
+  coord_flip() +
+  scale_x_reordered() +
+  # разряды для тысяч
+  scale_y_continuous(expand = c(0,0), labels = function(x) format(x, big.mark = " ", scientific = FALSE)) +
+  labs(x = "", y = "") +
+  silgelib::theme_plex()
+```
+
+Визуализируем количество пожаров, наблюдаемых в сутки, по видам населенных пунктов в виде "боксплотов" или [диаграмм размаха](https://ru.wikipedia.org/wiki/%D0%AF%D1%89%D0%B8%D0%BA_%D1%81_%D1%83%D1%81%D0%B0%D0%BC%D0%B8). Боксплоты упорядочим по значению медиан.
+
+```r
+pozh_df %>% 
+  count(f6, f5) %>% 
+  ggplot(., aes(x = f6 %>% fct_reorder(., n, median), y = n, fill = f6)) + 
+  geom_boxplot(alpha = 0.8) + coord_flip() + 
+  labs(y = "\nколичество пожаров в сутки, ед.", x = "") + 
+  theme(legend.position = "none")
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Количество количество пожаров в сутки по видам населенных пунктов*", fig.height = 4.5, fig.width = 8.5}
+pozh_df %>% 
+  count(f6, f5) %>% 
+  ggplot(., aes(x = f6 %>% fct_reorder(., n, median), y = n, fill = f6)) + 
+  geom_boxplot(alpha = 0.8) + coord_flip() + 
+  labs(y = "\nколичество пожаров в сутки, ед.", x = "") + 
+  silgelib::theme_plex() + theme(legend.position = "none") + ggsci::scale_fill_lancet()
+```
+
+Напомним, что отдельные выбросы на данной диаграмме отображаются точками. Например, для городской категории более 50 пожаров в сутки можно считать "выбросом", для сельских населенных пунктов -- более 25 пожаров.
+
+# Временной ряд соответствующий количеству пожаров
+
+## Визуализация временного ряда по различным категориям
+
+Поставим в соответствие ежедневному количеству пожаров в Красноярском крае временной ряд.
+
+```r
+pozh_df %>% 
+  group_by(f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  ggplot(., aes(x = f5, y = count)) + geom_line() + 
+  labs(x = "", y = "") + 
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y")
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Общий вид временного ряда, соответствующего количеству пожаров в Красноярском крае с 2010 по 2020 год*", fig.height = 3.7, fig.width = 9}
+pozh_df %>% 
+  group_by(f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  ggplot(., aes(x = f5, y = count)) + geom_line() + 
+  labs(x = "", y = "") + 
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y") +
+  silgelib::theme_plex() 
+```
+
+На графике хорошо видны периодические всплески количества пожаров (как мы покажем далее, с апреля по июль).
+
+Визуализируем временной ряд по видам населенных пунктов.
+
+```r
+pozh_df %>% 
+  mutate(f6 = fct_lump(f6, 3, other_level = "другие населенные пункты")) %>% 
+  group_by(f6, f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  group_by(f6) %>% 
+  mutate(total = sum(count)) %>% 
+  ungroup() %>% 
+  mutate(f6 = fct_reorder(f6, -total)) %>%
+  ggplot(., aes(x = f5, y = count)) + geom_line() + 
+  labs(x = "", y = "") + 
+  facet_wrap(~ f6, ncol = 2)
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Вид временного ряда, соответствующего количеству пожаров в Красноярском крае с 2010 по 2020 год по видам населенных пунктов*", fig.height = 6, fig.width = 9}
+pozh_df %>% 
+  mutate(f6 = fct_lump(f6, 3, other_level = "другие населенные пункты")) %>% 
+  group_by(f6, f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  group_by(f6) %>% 
+  mutate(total = sum(count)) %>% 
+  ungroup() %>% 
+  mutate(f6 = fct_reorder(f6, -total)) %>%
+  ggplot(., aes(x = f5, y = count)) + geom_line() + 
+  labs(x = "", y = "") + 
+  facet_wrap(~ f6, ncol = 2) +
+  silgelib::theme_plex() 
+```
+
+Рассмотрим несколько районов с наибольшим количеством пожаров.
+
+```r
+pozh_df %>% 
+  mutate(f2 = fct_lump(f2, 11, other_level = "другие районы")) %>% 
+  group_by(f2, f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  group_by(f2) %>% 
+  mutate(total = sum(count)) %>% 
+  ungroup() %>% 
+  mutate(f2 = fct_reorder(f2, -total)) %>%
+  ggplot(., aes(x = f5, y = count)) + geom_line(alpha = 0.8) + geom_smooth(se = F) +
+  labs(x = "", y = "") + 
+  facet_wrap(~ f2, scales = "free", ncol = 4)
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Вид временного ряда, соответствующего количеству пожаров в Красноярском крае с 2010 по 2020 год по районам края*", fig.height = 6, fig.width = 12}
+pozh_df %>% 
+  mutate(f2 = fct_lump(f2, 11, other_level = "другие районы")) %>% 
+  group_by(f2, f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  group_by(f2) %>% 
+  mutate(total = sum(count)) %>% 
+  ungroup() %>% 
+  mutate(f2 = fct_reorder(f2, -total)) %>%
+  ggplot(., aes(x = f5, y = count)) + geom_line(alpha = 0.8) + geom_smooth(se = F) +
+  labs(x = "", y = "") + 
+  facet_wrap(~ f2, scales = "free", ncol = 4) +
+  silgelib::theme_plex() 
+```
+
+Отметим существование пропусков в данных по некоторым районам края, например, по Сосновоборску, Лесосибирску, и т.д. Подробнее пропуски будут рассмотрены ниже.
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Пропуски в данных по некоторым районам Красноярского края*", fig.height = 5, fig.width = 10}
+pozh_df %>% 
+  #mutate(f2 = fct_lump(f2, 11, other_level = "другие районы")) %>% 
+  filter(f2 %in% c("Сосновоборск", "Лесосибирск", "Бородино", "Ачинский район", "Минусинск", "Назарово")) %>% 
+  group_by(f2, f5) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>% 
+  group_by(f2) %>% 
+  mutate(total = sum(count)) %>% 
+  ungroup() %>% 
+  mutate(f2 = fct_reorder(f2, -total)) %>%
+  ggplot(., aes(x = f5, y = count)) + geom_line(alpha = 0.8) + 
+  labs(x = "", y = "") + 
+  facet_wrap(~ f2, scales = "free", ncol = 3) +
+  silgelib::theme_plex() 
+```
+
+## Временной ряд
+
+Для работы с данными как с временным рядом будем использовать формат `tsibble`, присвоив в качестве **ключа** районы края.
+
+```{r, warning=FALSE, message=FALSE}
+require(tsibble)
+
+# key = районы края
+pozh_ts <- pozh_df %>% 
+  group_by(f2, f5) %>% 
+  summarise(y = n()) %>% 
+  ungroup() %>%
+  as_tsibble(., key = f2, index = f5)
+```
+
+Отметим, что пропущенные данные имеются во всех районах края, пропущено (либо в этот день не наблюдалось пожаров) более 170 000 значений!
+
+```{r}
+# пропущенные значения есть во всех районах!
+has_gaps(pozh_ts) 
+
+# пропущено более 170 000 значений
+scan_gaps(pozh_ts)
+```
+
+
+Самые большие пропуски данных по длительности наблюдались в Бородино и Сосновоборске.
+
+```{r}
+count_gaps(pozh_ts) %>% arrange(desc(.n))
+```
+
+Визуализируем все возможные пропуски в районах по годам в виде тепловой карты. Можно допустить, что в некоторых районах края (например, в отдаленном Эвенкийском районе) было мало пожаров за исследуемый период, однако, в некоторых районах пропуски затрагивают целые года. Меньше всего пропусков наблюдалось в районах города Красноярска.
+
+```r
+mosaic_gaps <-
+tibble(scan_gaps(pozh_ts)$f2, scan_gaps(pozh_ts)$f5 %>% lubridate::year()) %>% 
+  purrr::set_names("region", "year") %>% count(., region, year) 
+
+mosaic_gaps$year %<>% as.factor()
+
+mosaic_gaps %>% 
+  ggplot(., aes(x = region %>% fct_rev(), y = year, fill = n)) + coord_flip() + geom_tile() +
+  viridis::scale_fill_viridis(direction = -1, option = "cividis") + 
+  labs(x = "", y = "", fill = "количество пропусков\n(темнее - больше)") 
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Пропуски в данных по пожарам по районам Красноярского края*", fig.height = 14, fig.width = 9}
+mosaic_gaps <-
+tibble(scan_gaps(pozh_ts)$f2, scan_gaps(pozh_ts)$f5 %>% lubridate::year()) %>% 
+  purrr::set_names("region", "year") %>% count(., region, year) 
+
+mosaic_gaps$year %<>% as.factor()
+
+mosaic_gaps %>% 
+  ggplot(., aes(x = region %>% fct_rev(), y = year, fill = n)) + coord_flip() + geom_tile() +
+  viridis::scale_fill_viridis(direction = -1, option = "cividis") + 
+  labs(x = "", y = "", fill = "количество пропусков\n(темнее - больше)") +
+  silgelib::theme_plex()
+```
+
+
+Рассмотрим стандартное [STL-разложение ряда](https://ranalytics.github.io/tsa-with-r/ch-visualisation.html) на аддитивные компоненты:
+
+- тренд (регулируемый параметром `window`, чем он больше, тем тренд более плавный);
+- сезонная (здесь -- годовая) повторяющаяся компонента;
+- остаток (по сути -- "белый шум").
+
+```{r warning=FALSE, message=FALSE, fig.cap = "*STL-разложение временного ряда*", fig.height = 4.5, fig.width = 8.5}
+library(ggfortify)
+library(feasts)
+library(tsibble)
+
+pozh_df %>% 
+  group_by(f5) %>% 
+  summarise(y = n()) %>% 
+  ungroup() %>%
+  as_tsibble(., index = f5) %>%
+  model(STL(y ~ trend(window = 300) + season(period = "year"))) %>% 
+  components() %>% 
+  autoplot() + 
+  labs(x = "") +
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y") + theme_minimal()
+```
+
+Разложение компоненты ценно тем, что позволяет выделить ежегодно повторяющееся количество пожаров (`season_yearly`) и подробно исследовать тренд (`trend`).
+
+
+## Работа в библиотеке Prophet
+
+Для дальнейшего исследования временных рядов подключим библиотеку [Prophet](https://facebook.github.io/prophet/docs/quick_start.html#r-api).
+
+```{r, warning=FALSE, message=FALSE}
+library(prophet)
+
+pozh_prophet <- pozh_df %>% 
+  select(f5) %>% 
+  count(., f5, name = "y") %>% 
+  rename("ds" = f5)
+
+m <- prophet(pozh_prophet)
+```
+
+Рассмотрим прогноз на 1 год вперед по совокупным данным.
+
+```{r}
+future <- make_future_dataframe(m, periods = 365)
+
+forecast <- predict(m, future)
+tail(forecast[c('ds', 'yhat', 'yhat_lower', 'yhat_upper')])
+```
+
+Визуализируем прогноз.
+
+```r
+plot(m, forecast)
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Визуализация прогноза по количеству пожаров в Красноярском крае на 2021 год в библиотеке Prophet*", fig.height = 3.7, fig.width = 9}
+plot(m, forecast) + silgelib::theme_plex()
+```
+
+Рассмотрим компоненты разложения временного ряда. 
+
+```{r warning=FALSE, message=FALSE, fig.cap = "*Компоненты разложения временного ряда в библиотеке Prophet*", fig.height = 4.5, fig.width = 8}
+prophet_plot_components(m, forecast)
+```
+
+Из графика видно, что 
+
+- в последние годы наблюдается небольшое снижение тренда;
+- наименьшее количество пожаров происходило по вторникам, наибольшее -- в выходные дни;
+- ежегодный всплеск количества пожаров приходится на конец апреля -- начало июля.
+
+Рассмотрим точки изменения тренда.
+
+```r
+plot(m, forecast) + add_changepoints_to_plot(m)
+```
+
+```{r warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Точки изменения тренда в библиотеке Prophet*", fig.height = 3.7, fig.width = 9}
+plot(m, forecast) + add_changepoints_to_plot(m) + silgelib::theme_plex()
+```
+
+## Аномалии
+
+Для работы  аномалиями нам понадобятся библиотеки `tibbletime` и `anomalize`.
+
+Отметим различие характера аномалий в первые и последние года исследования. В первые три года аномалии начинаются с середины тренда, в то время как в последние года смещаются к его пику. Возможно, данная тенденция может быть связана с климатическими изменениями.
+
+```r
+library(tibbletime)
+library(anomalize)
+
+pozh_df %>% select(-f2) %>% 
+  filter(f5 <= as.Date("2012-12-30")) %>% 
+  count(., f5, name = "count") %>% 
+  as_tbl_time(., f5) %>% 
+  ungroup() %>%
+  time_decompose(count) %>%
+  anomalize(remainder) %>% 
+  plot_anomaly_decomposition() +
+  labs(title = "STL-декомпозиция аномалий", 
+       subtitle = "с 2010 по 2012 год",
+       x = "", y = "") + 
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y")
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Аномалии временного ряда (период с 2010 по 2012 год)*", fig.height = 7, fig.width = 9}
+library(tibbletime)
+library(anomalize)
+
+pozh_df %>% select(-f2) %>% 
+  filter(f5 <= as.Date("2012-12-30")) %>% 
+  count(., f5, name = "count") %>% 
+  as_tbl_time(., f5) %>% 
+  ungroup() %>%
+  time_decompose(count) %>%
+  anomalize(remainder) %>% 
+  plot_anomaly_decomposition() +
+  labs(title = "STL-декомпозиция аномалий", 
+       subtitle = "с 2010 по 2012 год",
+       x = "", y = "") + 
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y") + silgelib::theme_plex() 
+```
+
+Аномалии временного ряда за последние три года.
+
+```r
+pozh_df %>% select(-f2) %>% 
+  filter(f5 >= as.Date("2017-12-30")) %>% 
+  count(., f5, name = "count") %>% 
+  as_tbl_time(., f5) %>% 
+  ungroup() %>%
+  time_decompose(count) %>%
+  anomalize(remainder) %>% 
+  plot_anomaly_decomposition() +
+  labs(title = "STL-декомпозиция аномалий", 
+       subtitle = "с 2018 по 2020 год",
+       x = "", y = "") + 
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y") 
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE, fig.cap = "*Аномалии временного ряда (период с 2018 по 2020 год)*", fig.height = 7, fig.width = 9}
+
+pozh_df %>% select(-f2) %>% 
+  filter(f5 >= as.Date("2017-12-30")) %>% 
+  count(., f5, name = "count") %>% 
+  as_tbl_time(., f5) %>% 
+  ungroup() %>%
+  time_decompose(count) %>%
+  anomalize(remainder) %>% 
+  plot_anomaly_decomposition() +
+  labs(title = "STL-декомпозиция аномалий", 
+       subtitle = "с 2018 по 2020 год",
+       x = "", y = "") + 
+  scale_x_date(date_breaks = "12 months",
+               date_labels = "%Y") + silgelib::theme_plex() 
+```
+
+# Заключение
+
+Мы кратко рассмотрели данные по пожарам в Красноярском крае за период, охватывающий последние 10 лет. Данным был сопоставлен временной ряд. Мы увидели пропуски в заполнении исходных данных, рассмотрели периодические компоненты, тренд и аномалии. Можно отметить следующие предварительные выводы:
+
+- некоторый объем данных потерян, для корректной работы следует заполнить соответствующие пропущенные значения[^foot_gaps];
+- в последние годы наблюдается тренд на снижение количества пожаров в Красноярском крае;
+- больше всего пожаров происходит в выходные дни;
+- аномальные всплески количества пожаров наблюдаются примерно с конца апреля по июнь;
+- характер аномалий в первые и последние годы исследования изменился.
+
+[^foot_gaps]: Это в первую очередь относится к некоторым районам края за 2011-2012 года.
