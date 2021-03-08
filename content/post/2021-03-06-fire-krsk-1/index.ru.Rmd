@@ -47,10 +47,11 @@ library(tidyverse)
 
 ```{r warning=FALSE, message=FALSE, echo=FALSE}
 # чтение данных
-pozh_df <- read_csv("/Users/materov/Big Data МЧС/!Data_KRSK_scince_2010/krskData_f2_f6.csv")
+pozh_df <- read_csv("/Users/materov/Big Data МЧС/!Data_KRSK_scince_2010/krskData_new.csv")
 
 # классы пееременных
 pozh_df    %<>% as_tibble()
+pozh_df    %<>% dplyr::select(-f148)
 pozh_df    %<>% mutate_if(is.character, factor)
 pozh_df$f5 %<>% as.Date()
 ```
