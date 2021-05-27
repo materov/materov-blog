@@ -1,0 +1,806 @@
+---
+title: Термоточки в Российской Федерации
+author: admin
+date: '2021-05-27'
+slug: thermopoints
+categories: ["R"]
+tags: ["rstats", "геоданные"]
+subtitle: 'пример исследования термоточек зарегистированных на территории Российской Федерации'
+summary: 'Мы рассмотрим базовый анализ и визуализацию термоточек за период с 2012 по начало 2021 года.'
+authors: 
+- admin
+lastmod: '2021-05-27T21:58:02+07:00'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index.ru_files/header-attrs/header-attrs.js"></script>
+<link href="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.css" rel="stylesheet" />
+<script src="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.js"></script>
+
+
+<p><applause-button style="width: 58px; height: 58px;" color="#0C4047" multiclap="true"></applause-button></p>
+<div id="исследование-термоточек-зарегистрированных-в-рф" class="section level1">
+<h1>Исследование термоточек зарегистрированных в РФ</h1>
+<p><strong>Термоточка</strong> - это зарегистрированное в момент пролета спутника значительное повышение температуры на поверхности земли, в сравнении с соседними участками. В России температурные аномалии регистрируются системой Информационной системой дистанционного мониторинга Федерального агентства лесного хозяйства (<a href="https://pushkino.aviales.ru/main_pages/index.shtml">ИСДМ-Рослесхоз</a>). Каждая термоточка имеет собственный регистрационный номер. Мониторинг термоточек в режиме реального времени можно посмотреть, например, на сайтах <a href="https://fires.ru/">СКАНЭКС</a>, <a href="https://firms.modaps.eosdis.nasa.gov/map">NASA FIRMS Fire map</a> или <a href="https://public.aviales.ru/mapviewer/cgi/public_tiles.pl?1620864003000">Информационной системы</a> дистанционного мониторинга Федерального агентства лесного хозяйства.</p>
+<p>Мы рассмотрим и проанализируем открытые данные <a href="https://www.mchs.gov.ru/ministerstvo/otkrytoe-ministerstvo/otkrytye-dannye/7707034952-ThermoPoints">Зарегистрированные термические точки на территории Российской Федерации</a> доступные на соответствующей странице МЧС России.</p>
+<div id="исходные-данные" class="section level2">
+<h2>Исходные данные</h2>
+<p>Подключим необходимые библиотеки.</p>
+<pre class="r"><code>library(tidyverse)
+library(magrittr)
+library(maps)
+library(gganimate)
+library(gt)</code></pre>
+<p>Загрузим данные и рассмотрим их структуру.</p>
+<pre class="r"><code>df</code></pre>
+<pre><code>## # A tibble: 646,828 x 6
+##        id dt           lon   lat type_id type_name                   
+##     &lt;dbl&gt; &lt;date&gt;     &lt;dbl&gt; &lt;dbl&gt;   &lt;dbl&gt; &lt;chr&gt;                       
+##  1 573822 2012-01-01  132.  43.4       3 Горение мусора              
+##  2 573819 2012-01-01  132.  43.4       3 Горение мусора              
+##  3 573818 2012-01-01  134.  42.9       4 Сжигание порубочных остатков
+##  4 573823 2012-01-02  131.  42.9       4 Сжигание порубочных остатков
+##  5 573824 2012-01-02  132.  43.1      11 Не подтверждено             
+##  6 576488 2012-03-13  105.  50.5      11 Не подтверждено             
+##  7 576478 2012-03-13  132.  47.9       9 Природный пожар             
+##  8 576497 2012-03-13  132.  47.9       9 Природный пожар             
+##  9 576479 2012-03-13  132.  47.9       9 Природный пожар             
+## 10 576487 2012-03-13  104.  50.4       2 Техногенный пожар           
+## # … with 646,818 more rows</code></pre>
+<p>Данные представляют собой таблицу датированную с 2012-01-01 по 2021-04-07, содержащую 646 828 записей. В таблице имеются следующие поля:</p>
+<ul>
+<li><p><code>id</code> – уникальный номер термоточки;</p></li>
+<li><p><code>dt</code> – дата;</p></li>
+<li><p><code>lon</code> – долгота;</p></li>
+<li><p><code>lat</code> – широта;</p></li>
+<li><p><code>type_id</code> и <code>type_name</code> – тип термоточки.</p></li>
+</ul>
+<p>Наибольшее количество термоточек приходится на <a href="https://ru.wikipedia.org/wiki/%D0%9B%D0%B5%D1%81%D0%BD%D0%BE%D0%B9_%D0%BF%D0%BE%D0%B6%D0%B0%D1%80#:~:text=%D0%9B%D0%B5%D1%81%D0%BD%D0%BE%CC%81%D0%B9%20%D0%BF%D0%BE%D0%B6%D0%B0%CC%81%D1%80%20%E2%80%94%20%D0%BD%D0%B5%D0%BA%D0%BE%D0%BD%D1%82%D1%80%D0%BE%D0%BB%D0%B8%D1%80%D1%83%D0%B5%D0%BC%D0%BE%D0%B5%20%D0%B3%D0%BE%D1%80%D0%B5%D0%BD%D0%B8%D0%B5%20%D1%80%D0%B0%D1%81%D1%82%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%D0%BD%D0%BE%D1%81%D1%82%D0%B8,%D0%B4%D0%B5%D0%BB%D0%B8%D1%82%D1%8C%20%D0%BD%D0%B0%20%D0%B5%D1%81%D1%82%D0%B5%D1%81%D1%82%D0%B2%D0%B5%D0%BD%D0%BD%D1%8B%D0%B5%20%D0%B8%20%D0%B0%D0%BD%D1%82%D1%80%D0%BE%D0%BF%D0%BE%D0%B3%D0%B5%D0%BD%D0%BD%D1%8B%D0%B5.">лесные пожары</a>:</p>
+<pre class="r"><code>count(df, type_name, sort = TRUE) %&gt;% 
+  rename(количество       = n,
+         `тип термоточки` = type_name) %&gt;% 
+  mutate(процент    = paste0(round(100*количество/sum(количество), 2), &quot;%&quot;),
+         количество = format(количество, big.mark = &quot; &quot;)) %&gt;% 
+  gt() %&gt;%  
+  tab_options(
+    column_labels.border.top.color = &quot;white&quot;,
+    column_labels.border.top.width = px(3),
+    column_labels.border.bottom.color = &quot;black&quot;,
+    table_body.hlines.color = &quot;white&quot;,
+    table.border.bottom.color = &quot;white&quot;,
+    table.border.bottom.width = px(3)
+  ) %&gt;% 
+  tab_source_note(md(&quot;**Таблица**: @materov &lt;br&gt;  **Данные**: открытые данные МЧС России&quot;)) </code></pre>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#tbytaqucha .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 3px;
+  border-bottom-color: white;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#tbytaqucha .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#tbytaqucha .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 3px;
+  border-top-color: white;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: black;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#tbytaqucha .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#tbytaqucha .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#tbytaqucha .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#tbytaqucha .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: black;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#tbytaqucha .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#tbytaqucha .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#tbytaqucha .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#tbytaqucha .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#tbytaqucha .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: white;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#tbytaqucha .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#tbytaqucha .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#tbytaqucha .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#tbytaqucha .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#tbytaqucha .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#tbytaqucha .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#tbytaqucha .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#tbytaqucha .gt_left {
+  text-align: left;
+}
+
+#tbytaqucha .gt_center {
+  text-align: center;
+}
+
+#tbytaqucha .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#tbytaqucha .gt_font_normal {
+  font-weight: normal;
+}
+
+#tbytaqucha .gt_font_bold {
+  font-weight: bold;
+}
+
+#tbytaqucha .gt_font_italic {
+  font-style: italic;
+}
+
+#tbytaqucha .gt_super {
+  font-size: 65%;
+}
+
+#tbytaqucha .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="tbytaqucha" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">тип термоточки</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">количество</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">процент</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_left">Лесной пожар</td>
+      <td class="gt_row gt_left">222 787</td>
+      <td class="gt_row gt_left">34.44%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Неконтролируемый пал</td>
+      <td class="gt_row gt_left">131 056</td>
+      <td class="gt_row gt_left">20.26%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Контролируемый пал</td>
+      <td class="gt_row gt_left"> 92 015</td>
+      <td class="gt_row gt_left">14.23%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Природный пожар</td>
+      <td class="gt_row gt_left"> 86 243</td>
+      <td class="gt_row gt_left">13.33%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Не подтверждено</td>
+      <td class="gt_row gt_left"> 61 738</td>
+      <td class="gt_row gt_left">9.54%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Сжигание порубочных остатков</td>
+      <td class="gt_row gt_left"> 25 260</td>
+      <td class="gt_row gt_left">3.91%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Технологический процесс</td>
+      <td class="gt_row gt_left"> 12 644</td>
+      <td class="gt_row gt_left">1.95%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Горение мусора</td>
+      <td class="gt_row gt_left">  9 027</td>
+      <td class="gt_row gt_left">1.4%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Сжигание мусора</td>
+      <td class="gt_row gt_left">  4 441</td>
+      <td class="gt_row gt_left">0.69%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Техногенный пожар</td>
+      <td class="gt_row gt_left">  1 454</td>
+      <td class="gt_row gt_left">0.22%</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">Торфяной пожар</td>
+      <td class="gt_row gt_left">    163</td>
+      <td class="gt_row gt_left">0.03%</td>
+    </tr>
+  </tbody>
+  <tfoot class="gt_sourcenotes">
+    <tr>
+      <td class="gt_sourcenote" colspan="3"><strong>Таблица</strong>: @materov <br>  <strong>Данные</strong>: открытые данные МЧС России</td>
+    </tr>
+  </tfoot>
+  
+</table></div>
+<p>Добавим вспомогательные переменные, представляющие собой год и месяц.</p>
+<pre class="r"><code>df &lt;-
+df %&gt;% 
+  mutate(month = lubridate::month(dt, label = T),
+         year  = lubridate::year(dt))</code></pre>
+<p>Наибольшее количество термоточек наблюдалось в 2020 году, что возможно связано с улучшением системы мониторинга (цвет столбцов указывает на группировку по близким значениям):</p>
+<pre class="r"><code>df %&gt;% 
+  count(., year, sort = TRUE) %&gt;% 
+  ggplot(., aes(x = n, fill = n,
+                y = fct_reorder(factor(year), n))) + 
+  geom_col(color = &quot;white&quot;) +
+  scale_x_continuous(labels = function(x) format(x, big.mark = &quot; &quot;, scientific = FALSE)) +
+  hrbrthemes::theme_ipsum_rc(grid = &quot;X&quot;) +
+  labs(x = &quot;&quot;, y = &quot;&quot;, 
+       caption = &quot;открытые данные МЧС России&quot;) +
+  viridis::scale_fill_viridis(direction = -1, option = &quot;plasma&quot;) +
+  theme(legend.position = &quot;none&quot;)</code></pre>
+<div class="figure"><span id="fig:colsbyyear"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/colsbyyear-1.png" alt="*Количество наблюдаемых термоточек в РФ с 2012 по начало 2021 г.*" width="864" />
+<p class="caption">
+Рисунок 1: <em>Количество наблюдаемых термоточек в РФ с 2012 по начало 2021 г.</em>
+</p>
+</div>
+<p>Очевидно, что наибольшее количество термоточек приходится на летние и весенние месяцы:</p>
+<pre class="r"><code>df %&gt;% 
+  group_by(dt, month) %&gt;% 
+  summarise(count = n()) %&gt;% 
+  ggplot(aes(x = dt, y = count, color = factor(month))) + geom_point(alpha = 0.7) +
+  hrbrthemes::theme_ft_rc() +
+  labs(color = &quot;месяц:&quot;, x = &quot;&quot;, y = &quot;&quot;) +
+  guides(color = guide_legend(nrow = 2, override.aes = list(size = 3))) +
+  scale_x_date(date_breaks = &quot;12 months&quot;,
+               date_labels = &quot;%Y&quot;) +
+  scale_y_continuous(labels = function(x) format(x, big.mark = &quot; &quot;, scientific = FALSE),
+                     breaks = seq(0, 4000, by = 500)) +
+  theme(legend.position = &quot;bottom&quot;)</code></pre>
+<div class="figure"><span id="fig:graphbymonth"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/graphbymonth-1.png" alt="*Количество термоточек зарегистрированных в Российской Федерации*" width="960" />
+<p class="caption">
+Рисунок 2: <em>Количество термоточек зарегистрированных в Российской Федерации</em>
+</p>
+</div>
+<p>Пример распределения термоточек по категориям показан ниже. Здесь была использована библиотека <code>ggstream</code> для визуализации.</p>
+<pre class="r"><code>library(ggstream)
+
+df_subset &lt;- df %&gt;% filter(year %in% c(&quot;2019&quot;, &quot;2020&quot;))
+
+df_subset %&gt;% 
+  count(., dt, type_name) %&gt;% 
+  rename(`тип:` = type_name) %&gt;% 
+  ggplot(aes(x = dt, y = n, fill = `тип:`, label = `тип:`, color = `тип:`)) + geom_stream() +
+  scale_colour_manual(values = paletteer::paletteer_d(&quot;dutchmasters::pearl_earring&quot;, direction = -1) %&gt;% colorspace::darken(.8)) +
+  scale_fill_manual(  values = paletteer::paletteer_d(&quot;dutchmasters::pearl_earring&quot;, direction = -1) %&gt;% colorspace::lighten(.2)) +
+  scale_x_date(date_breaks = &quot;3 months&quot;,
+               date_labels = &quot;%b %Y&quot;) +
+  hrbrthemes::theme_ipsum(grid = &quot;X&quot;) +
+  theme(legend.position = &quot;bottom&quot;) +
+  labs(x = &quot;&quot;, y = &quot;&quot;)</code></pre>
+<div class="figure"><span id="fig:streamplot"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/streamplot-1.png" alt="*Количество термоточек зарегистрированных в Российской Федерации в 2019-2020 гг.*" width="912" />
+<p class="caption">
+Рисунок 3: <em>Количество термоточек зарегистрированных в Российской Федерации в 2019-2020 гг.</em>
+</p>
+</div>
+<p>Также, количественную характеристику по термоточкам можно посмотреть с помощью диаграмм размаха.</p>
+<pre class="r"><code>df %&gt;% 
+  count(dt, year) %&gt;% 
+  ggplot(aes(x = factor(year), y = n)) + geom_boxplot() +
+  scale_y_continuous(labels = function(x) format(x, big.mark = &quot; &quot;, scientific = FALSE),
+                     breaks = seq(0, 4000, by = 500)) + 
+  labs(x = &quot;&quot;, y = &quot;&quot;)</code></pre>
+<div class="figure"><span id="fig:boxplots"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/boxplots-1.png" alt="*Диаграммы размаха, характеризующие количество термоточек зарегистрированных в Российской Федерации*" width="864" />
+<p class="caption">
+Рисунок 4: <em>Диаграммы размаха, характеризующие количество термоточек зарегистрированных в Российской Федерации</em>
+</p>
+</div>
+</div>
+<div id="географическое-распределение-термоточек" class="section level2">
+<h2>Географическое распределение термоточек</h2>
+<p>Рассмотрим географическое расположение термоточек на карте РФ по сезонам. Наибольшее количество явлений наблюдалось на юге РФ и на территории Сибири и Дальнего Востока. Подложка представляет собой <code>toner-background</code>-карту загруженную с помощью библиотеки <code>ggmap</code>.</p>
+<pre class="r"><code>library(ggmap)
+ru &lt;- c(left = 20, bottom = 41.28413, right = 180, top = 80)
+map &lt;- get_stamenmap(ru, zoom = 5, maptype = &quot;toner-background&quot;)
+
+df &lt;-
+df %&gt;% 
+  mutate(
+    season = case_when(
+      month == &quot;янв&quot; ~ &quot;зима&quot;,
+      month == &quot;фев&quot; ~ &quot;зима&quot;,
+      month == &quot;мар&quot; ~ &quot;весна&quot;,
+      month == &quot;апр&quot; ~ &quot;весна&quot;,
+      month == &quot;май&quot; ~ &quot;весна&quot;,
+      month == &quot;июн&quot; ~ &quot;лето&quot;,
+      month == &quot;июл&quot; ~ &quot;лето&quot;,
+      month == &quot;авг&quot; ~ &quot;лето&quot;,
+      month == &quot;сен&quot; ~ &quot;осень&quot;,
+      month == &quot;окт&quot; ~ &quot;осень&quot;,
+      month == &quot;ноя&quot; ~ &quot;осень&quot;,
+      month == &quot;дек&quot; ~ &quot;зима&quot;
+    )
+  )
+
+ggmap(map) +
+  geom_point(data = df, 
+             alpha = 0.015, size = 0.4, 
+             aes(lon, lat), color = &quot;red&quot;) + 
+  labs(x = &quot;&quot;, y = &quot;&quot;)</code></pre>
+<div class="figure"><span id="fig:geo-1"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/geo-1.png" alt="*Географическое расположение термоточек зарегистрированных в Российской Федерации за период с 2012 по начало 2021 года*" width="864" />
+<p class="caption">
+Рисунок 5: <em>Географическое расположение термоточек зарегистрированных в Российской Федерации за период с 2012 по начало 2021 года</em>
+</p>
+</div>
+<pre class="r"><code>ggmap(map) +
+  geom_point(data = df, 
+             alpha = 0.015, size = 0.4, 
+             aes(lon, lat, color = factor(season))) + 
+  labs(x = &quot;&quot;, y = &quot;&quot;, color = &quot;сезон:&quot;) + 
+  viridis::scale_color_viridis(option = &quot;turbo&quot;, discrete = T) +
+  silgelib::theme_plex() +
+  theme(legend.position = &quot;none&quot;) +
+  facet_wrap(~factor(season) %&gt;% 
+               fct_relevel(&quot;зима&quot;, &quot;весна&quot;, &quot;лето&quot;, &quot;осень&quot;)) </code></pre>
+<div class="figure"><span id="fig:geo-2"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/geo-2.png" alt="*Географическое расположение термоточек зарегистрированных в Российской Федерации за период с 2012 по начало 2021 года*" width="864" />
+<p class="caption">
+Рисунок 6: <em>Географическое расположение термоточек зарегистрированных в Российской Федерации за период с 2012 по начало 2021 года</em>
+</p>
+</div>
+<p>Отметим широту и долготу, на которых наблюдалось наибольшее количество точек.</p>
+<pre class="r"><code># долгота
+df %&gt;% 
+  ggplot(aes(lon)) + geom_histogram(bins = 100) +
+  scale_x_continuous(breaks = seq(round(min(df$lon))-20, round(max(df$lon))+20, by = 20)) +
+  geom_vline(xintercept = 133, linetype = &quot;dashed&quot;, color = &quot;red&quot;) +
+  scale_y_continuous(labels = function(x) format(x, big.mark = &quot; &quot;, scientific = FALSE),
+                     breaks = seq(0, 50000, by = 10000)) +
+  silgelib::theme_plex() +
+  labs(x = &quot;долгота&quot;, y = &quot;&quot;)</code></pre>
+<div class="figure"><span id="fig:lonlatmax-1"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/lonlatmax-1.png" alt="*Широта и долгота, на которых наблюдалось наибольшее количество термоточек*" width="864" />
+<p class="caption">
+Рисунок 7: <em>Широта и долгота, на которых наблюдалось наибольшее количество термоточек</em>
+</p>
+</div>
+<pre class="r"><code># широта
+df %&gt;% 
+  ggplot(aes(lat)) + geom_histogram(bins = 100) +
+  scale_x_continuous(breaks = seq(round(min(df$lat))-21, round(max(df$lat))+21, by = 5)) +
+  geom_vline(xintercept = 51.5, linetype = &quot;dashed&quot;, color = &quot;red&quot;) +
+  geom_vline(xintercept = 55.3, linetype = &quot;dashed&quot;, color = &quot;red&quot;) +
+  geom_vline(xintercept = 63, linetype = &quot;dashed&quot;, color = &quot;red&quot;) +
+  scale_y_continuous(labels = function(x) format(x, big.mark = &quot; &quot;, scientific = FALSE),
+                     breaks = seq(0, 50000, by = 5000)) +
+  silgelib::theme_plex() +
+  labs(x = &quot;широта&quot;, y = &quot;&quot;) </code></pre>
+<div class="figure"><span id="fig:lonlatmax-2"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/lonlatmax-2.png" alt="*Широта и долгота, на которых наблюдалось наибольшее количество термоточек*" width="864" />
+<p class="caption">
+Рисунок 8: <em>Широта и долгота, на которых наблюдалось наибольшее количество термоточек</em>
+</p>
+</div>
+<p>Выделим полученные характеристики и нанесем их на модельную карту, где плотности показаны с помощью гексогональной структуры.</p>
+<pre class="r"><code>df %&gt;% 
+  ggplot(aes(lon, lat)) + 
+  borders(&quot;world&quot;, regions = &quot;Russia&quot;, fill = &quot;grey80&quot;) +
+  geom_hex(alpha = 0.7, bins = 60) +
+  viridis::scale_fill_viridis(option = &quot;plasma&quot;, limits = c(0,6300)) +
+  silgelib::theme_plex() +
+  theme(line = element_blank()) +
+  scale_x_continuous(breaks = seq(round(min(df$lon))-20, round(max(df$lon))+20, by = 20)) +
+  labs(x = &quot;\nдолгота&quot;, y = &quot;широта\n&quot;,
+       fill = &quot;количество\nтермоточек&quot;) +
+  geom_vline(xintercept = 133,  linetype = &quot;dashed&quot;, color = &quot;black&quot;, size = 0.75) +
+  geom_hline(yintercept = 51.5, linetype = &quot;dashed&quot;, color = &quot;black&quot;, size = 0.75) +
+  geom_hline(yintercept = 55.3, linetype = &quot;dashed&quot;, color = &quot;black&quot;, size = 0.75) +
+  geom_hline(yintercept = 63,   linetype = &quot;dashed&quot;, color = &quot;black&quot;, size = 0.75)</code></pre>
+<div class="figure"><span id="fig:hexmap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/hexmap-1.png" alt="*Выделены широта и долгота, на которых наблюдалось наибольшее количество термоточек*" width="864" />
+<p class="caption">
+Рисунок 9: <em>Выделены широта и долгота, на которых наблюдалось наибольшее количество термоточек</em>
+</p>
+</div>
+<p>Покажем, как были распределены термоточки по годам.</p>
+<pre class="r"><code>df %&gt;% 
+  ggplot(aes(lon, lat)) + 
+  borders(&quot;world&quot;, regions = &quot;Russia&quot;, fill = &quot;grey80&quot;) +
+  geom_hex(alpha = 0.7, bins = 50) +
+  coord_fixed(ratio = 2.5) +
+  viridis::scale_fill_viridis(option = &quot;plasma&quot;, limits = c(0,4000), breaks = seq(0, 4000, by = 1000)) +
+  silgelib::theme_plex() +
+  theme(line = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(.5,&quot;cm&quot;),
+        legend.key.width = unit(1.4,&quot;cm&quot;),
+        legend.position = &quot;bottom&quot;) +
+  labs(x = &quot;\nдолгота&quot;, y = &quot;широта\n&quot;,
+       fill = &quot;количество термоточек:&quot;) + facet_wrap(~factor(year))</code></pre>
+<div class="figure"><span id="fig:hexmapbyyear"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/hexmapbyyear-1.png" alt="*Распеределение термоточек по годам*" width="960" />
+<p class="caption">
+Рисунок 10: <em>Распеределение термоточек по годам</em>
+</p>
+</div>
+<p>Рассмотрим распеределение термоточек по месяцам, например, для лесных и природных пожаров.</p>
+<pre class="r"><code>df %&gt;% 
+  filter(type_name %in% c(&quot;Лесной пожар&quot;, &quot;Природный пожар&quot;) ) %&gt;% 
+  ggplot(aes(lon, lat)) + 
+  borders(&quot;world&quot;, regions = &quot;Russia&quot;, fill = &quot;grey80&quot;) +
+  geom_hex(alpha = 0.7, bins = 50) +
+  coord_fixed(ratio = 2.5) +
+  viridis::scale_fill_viridis(option = &quot;plasma&quot;, limits = c(0,3000), breaks = seq(0, 3000, by = 1000)) +
+  silgelib::theme_plex() +
+  theme(line = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(.5,&quot;cm&quot;),
+        legend.key.width = unit(1.2,&quot;cm&quot;),
+        legend.position = &quot;bottom&quot;) +
+  #scale_color_continuous() +
+  labs(x = &quot;\nдолгота&quot;, y = &quot;широта\n&quot;,
+       fill = &quot;количество термоточек:&quot;) + facet_wrap(~factor(month))</code></pre>
+<div class="figure"><span id="fig:hexmapbymonth"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/hexmapbymonth-1.png" alt="*Распеределение термоточек по месяцам для лесных и природных пожаров*" width="960" />
+<p class="caption">
+Рисунок 11: <em>Распеределение термоточек по месяцам для лесных и природных пожаров</em>
+</p>
+</div>
+<p>Рассмотрим распеределение термоточек по категориям.</p>
+<pre class="r"><code>df %&gt;% 
+  ggplot(aes(lon, lat)) + 
+  borders(&quot;world&quot;, regions = &quot;Russia&quot;, fill = &quot;grey80&quot;) +
+  geom_hex(alpha = 0.7, bins = 50) +
+  coord_fixed(ratio = 2.5) +
+  viridis::scale_fill_viridis(option = &quot;plasma&quot;, limits = c(0,7000), breaks = seq(0, 7000, by = 1000)) +
+  silgelib::theme_plex() +
+  theme(line = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.key.size = unit(.5,&quot;cm&quot;),
+        legend.key.width = unit(2,&quot;cm&quot;),
+        legend.position = &quot;bottom&quot;) +
+  #scale_color_continuous() +
+  labs(x = &quot;\nдолгота&quot;, y = &quot;широта\n&quot;,
+       fill = &quot;количество термоточек:&quot;) + facet_wrap(~factor(type_name))</code></pre>
+<div class="figure"><span id="fig:hexmapbytype"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/hexmapbytype-1.png" alt="*Распеределение термоточек по категориям.*" width="960" />
+<p class="caption">
+Рисунок 12: <em>Распеределение термоточек по категориям.</em>
+</p>
+</div>
+<p>Для отображения динамики распространения точек, зарегистрированных как пожары в 2019-2020 годах, воспользуемся анимацией.</p>
+<p>Сначала отобразим основу как статическую карту.</p>
+<pre class="r"><code>df_fires &lt;- df %&gt;% 
+  filter(year %in% c(&quot;2019&quot;, &quot;2020&quot;),
+         type_name %in% c(&quot;Лесной пожар&quot;, &quot;Природный пожар&quot;))
+
+map_anim &lt;-
+ggmap(map) +
+  geom_point(data = df_fires, 
+             size = 0.5, alpha = 0.7,
+             aes(lon, lat, color = as.factor(month))) +
+  labs(x = &quot;&quot;, y = &quot;&quot;, color = &quot;месяц:&quot;) +
+  guides(color = guide_legend(nrow = 2, override.aes = list(size = 2, alpha = 1))) +
+  silgelib::theme_plex() +
+  theme(line = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = &quot;bottom&quot;)
+
+map_anim</code></pre>
+<div class="figure"><span id="fig:statanimation"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/statanimation-1.png" alt="*Лесные и природные пожары на территории РФ в 2019-2020 годах*" width="864" />
+<p class="caption">
+Рисунок 13: <em>Лесные и природные пожары на территории РФ в 2019-2020 годах</em>
+</p>
+</div>
+<p>Непосредственно анимация (показано недельное изменение) реализована в библиотеке <code>gganimate</code>.</p>
+<pre class="r"><code>map_anim &lt;- 
+  map_anim +
+  transition_time(dt) + 
+  labs(title = &quot;Дата пожара: {frame_time}&quot;) +
+  # необходимо для более плавного перехода
+  shadow_wake(wake_length = 0.1, alpha = FALSE)
+
+# fps позволяет регулировать скорость анимации
+animate(map_anim, height = 600, width = 900, res = 140, fps = 2)</code></pre>
+<div class="figure"><span id="fig:animation"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/animation-1.gif" alt="*Анимация, показывающая распространение лесных и природных пожаров на территории РФ в 2019-2020 годах*"  />
+<p class="caption">
+Рисунок 14: <em>Анимация, показывающая распространение лесных и природных пожаров на территории РФ в 2019-2020 годах</em>
+</p>
+</div>
+</div>
+<div id="заключение" class="section level2">
+<h2>Заключение</h2>
+<p>В статье показаны некоторые основные характеристики связанные с термоточками, фиксируемыми в Российской Федерации. Основу базового анализа составили инструменты для работы с картографическими данными на языке программирования <strong>R</strong>.</p>
+</div>
+</div>
