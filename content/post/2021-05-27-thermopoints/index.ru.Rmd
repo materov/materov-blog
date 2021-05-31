@@ -27,8 +27,6 @@ applause::button(
 )
 ```
 
-# Исследование термоточек зарегистрированных в РФ
-
 **Термоточка** - это зарегистрированное в момент пролета спутника значительное повышение температуры на поверхности земли, в сравнении с соседними участками. В России температурные аномалии регистрируются системой Информационной системой дистанционного мониторинга Федерального агентства лесного хозяйства ([ИСДМ-Рослесхоз](https://pushkino.aviales.ru/main_pages/index.shtml)). Каждая термоточка имеет собственный регистрационный номер. Мониторинг термоточек в режиме реального времени можно посмотреть, например, на сайтах [СКАНЭКС](https://fires.ru/), [NASA FIRMS Fire map](https://firms.modaps.eosdis.nasa.gov/map) или [Информационной системы](https://public.aviales.ru/mapviewer/cgi/public_tiles.pl?1620864003000) дистанционного мониторинга Федерального агентства лесного хозяйства.
 
 Мы рассмотрим и проанализируем открытые данные [Зарегистрированные термические точки на территории Российской Федерации](https://www.mchs.gov.ru/ministerstvo/otkrytoe-ministerstvo/otkrytye-dannye/7707034952-ThermoPoints) доступные на соответствующей странице МЧС России.
@@ -143,7 +141,7 @@ df_subset %>%
   ggplot(aes(x = dt, y = n, fill = `тип:`, label = `тип:`, color = `тип:`)) + geom_stream() +
   scale_colour_manual(values = paletteer::paletteer_d("dutchmasters::pearl_earring", direction = -1) %>% colorspace::darken(.8)) +
   scale_fill_manual(  values = paletteer::paletteer_d("dutchmasters::pearl_earring", direction = -1) %>% colorspace::lighten(.2)) +
-  scale_x_date(date_breaks = "3 months",
+  scale_x_date(date_breaks = "4 months",
                date_labels = "%b %Y") +
   hrbrthemes::theme_ipsum(grid = "X") +
   theme(legend.position = "bottom") +
@@ -213,8 +211,11 @@ ggmap(map) +
 
 Отметим широту и долготу, на которых наблюдалось наибольшее количество точек.
 
-```{r lonlatmax, warning=FALSE, message=FALSE, fig.cap = "*Широта и долгота, на которых наблюдалось наибольшее количество термоточек*", fig.height = 5, fig.width = 9}
+```{r lonlatmax, warning=FALSE, message=FALSE, fig.cap = "*Широта и долгота, на которых наблюдалось наибольшее количество термоточек*", fig.height = 8, fig.width = 9}
+library(patchwork)
+
 # долгота
+p1 <-
 df %>% 
   ggplot(aes(lon)) + geom_histogram(bins = 100) +
   scale_x_continuous(breaks = seq(round(min(df$lon))-20, round(max(df$lon))+20, by = 20)) +
@@ -225,6 +226,7 @@ df %>%
   labs(x = "долгота", y = "")
 
 # широта
+p2 <-
 df %>% 
   ggplot(aes(lat)) + geom_histogram(bins = 100) +
   scale_x_continuous(breaks = seq(round(min(df$lat))-21, round(max(df$lat))+21, by = 5)) +
@@ -235,6 +237,8 @@ df %>%
                      breaks = seq(0, 50000, by = 5000)) +
   silgelib::theme_plex() +
   labs(x = "широта", y = "") 
+
+p1 / p2
 ```
 
 Выделим полученные характеристики и нанесем их на модельную карту, где плотности показаны с помощью гексогональной структуры.
@@ -258,7 +262,7 @@ df %>%
 
 Покажем, как были распределены термоточки по годам.
 
-```{r hexmapbyyear, warning=FALSE, message=FALSE, fig.cap = "*Распеределение термоточек по годам*", fig.height = 7, fig.width = 10}
+```{r hexmapbyyear, warning=FALSE, message=FALSE, fig.cap = "*Распределение термоточек по годам*", fig.height = 7, fig.width = 10}
 df %>% 
   ggplot(aes(lon, lat)) + 
   borders("world", regions = "Russia", fill = "grey80") +
@@ -280,9 +284,9 @@ df %>%
        fill = "количество термоточек:") + facet_wrap(~factor(year))
 ```
 
-Рассмотрим распеределение термоточек по месяцам, например, для лесных и природных пожаров.
+Рассмотрим распределение термоточек по месяцам, например, для лесных и природных пожаров.
 
-```{r hexmapbymonth, warning=FALSE, message=FALSE, fig.cap = "*Распеределение термоточек по месяцам для лесных и природных пожаров*", fig.height = 7, fig.width = 10}
+```{r hexmapbymonth, warning=FALSE, message=FALSE, fig.cap = "*Распределение термоточек по месяцам для лесных и природных пожаров*", fig.height = 7, fig.width = 10}
 df %>% 
   filter(type_name %in% c("Лесной пожар", "Природный пожар") ) %>% 
   ggplot(aes(lon, lat)) + 
@@ -306,9 +310,9 @@ df %>%
        fill = "количество термоточек:") + facet_wrap(~factor(month))
 ```
 
-Рассмотрим распеределение термоточек по категориям.
+Рассмотрим распределение термоточек по категориям.
 
-```{r hexmapbytype, warning=FALSE, message=FALSE, fig.cap = "*Распеределение термоточек по категориям.*", fig.height = 7, fig.width = 10}
+```{r hexmapbytype, warning=FALSE, message=FALSE, fig.cap = "*Распределение термоточек по категориям.*", fig.height = 7, fig.width = 10}
 df %>% 
   ggplot(aes(lon, lat)) + 
   borders("world", regions = "Russia", fill = "grey80") +
