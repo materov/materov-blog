@@ -77,7 +77,7 @@ url <- "https://raw.githubusercontent.com/materov/blog_data/main/df_hydro.csv"
 df_hydro <- readr::read_csv(url)
 ```
 
-Исходные данные содержат `r format(nrow(df_hydro), big.mark = " ")` записей и имеют две переменных: `date` и `level`, отвечающих за дату наблюдения и уровень воды воды в метрах над нулем графика поста.
+Исходные данные содержат `r format(nrow(df_hydro), big.mark = " ")` записей и имеют две переменных: `date` и `level`, отвечающих за дату наблюдения и уровень воды в метрах над нулем графика поста.
 
 ```{r warning=FALSE, message=FALSE}
 df_hydro
