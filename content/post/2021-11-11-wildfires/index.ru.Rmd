@@ -1,0 +1,579 @@
+---
+title: Лесные пожары в Красноярском крае
+author: admin
+date: '2021-11-11'
+slug: wildfires
+categories: ["R"]
+tags: ["rstats", "геоданные"]
+subtitle: 'пример моделирования географически распределенных данных методами машинного обучения'
+summary: 'Здесь рассмотрен анализ, визуализация и пример моделирования методами машинного обучения геоданных в применении к лесным пожарам за период с 2011 по 2020 года в Красноярском крае.'
+authors: 
+- admin
+lastmod: '2021-11-11T21:33:29+07:00'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+```{r applause-button, echo=FALSE}
+applause::button(
+  color = "#0C4047",
+  width = "58px",
+  multiclap = T
+)
+```
+
+Мы рассмотрим некоторые возможности экосистемы языка программирования **R** в применении к анализу данных по лесным пожарам. Базовый подход к исследованию термоточек в Российской Федерации был ранее разобран в одной из предыдущих [записей в блоге](https://materov-blog.netlify.app/post/thermopoints/). Цель настоящей публикации -- выявить тенденции с пожарами в Красноярском крае за период 2011-2020 года и построить пример модели машинного обучения для классификации пожаров находящихся в критической, с точки зрения вероятности возникновения пожаров, зоне менее 5 км от населенных пунктов. Отметим что используемые подходы могут быть легко распространены и на другие регионы РФ.
+Данные, использованные здесь, были собраны Федеральным агентством лесного хозяйства ФБУ «Авиалесоохрана» и предоставлены Информационной системой дистанционного мониторинга Федерального агентства лесного хозяйства ([ИСДМ-Рослесхоз](https://pushkino.aviales.ru/main_pages/index.shtml)). 
+
+Язык **R** изначально задумывался авторами как статистический язык программирования, но сейчас, в силу наличия огромного количества библиотек, расширяющих базовые возможности языка, и доступности, используется для самых различных задач и хорошо зарекомендовал себя в применении к геовычислениям (см., например, монографию [Geocomputation with R](https://geocompr.robinlovelace.net/) или материалы курсов [Визуализация и анализ географических данных на языке R](https://tsamsonov.github.io/r-geo-course/) и [Пространственная статистика и моделирование на языке R](https://tsamsonov.github.io/r-spatstat-course/)). Хорошей альтернативой для использования современных методов программирования в применении к геовычислениям является язык программирования **Python** (см. [Geoprocessing with Python](https://www.manning.com/books/geoprocessing-with-python)). 
+
+Основой для построения модели машинного обучения в нашем случае является библиотека [tidymodels](https://www.tidymodels.org/). Для *геосамплинга* (повторной выборки географически распределенных данных) мы используем экспериментальную библиотеку [spatialsample](https://spatialsample.tidymodels.org/) как в статьях [Spatial resampling for #TidyTuesday and the #30DayMapChallenge](https://juliasilge.com/blog/map-challenge/) и [Predicting injuries for Chicago traffic crashes](https://juliasilge.com/blog/chicago-traffic-model/), авторами которых является [Julia Silge](https://juliasilge.com/resume/). Моделям машинного обучения в применении к пожарам посвящено очень много различных публикаций, однако модели такого рода в них ранее не рассматривались. Большой обзор [A review of machine learning applications in wildfire science and management](https://cdnsciencepub.com/doi/full/10.1139/er-2020-0019) является, по сути, энциклопедией возможных подходов к задачам моделирования в области изучения лесных пожаров и может служить отправной точкой для исследователей.
+
+
+## Разведочный анализ данных
+
+
+Загрузим необходимые библиотеки.
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(magrittr)
+library(kableExtra)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+wildfires_raw_2010 <- readxl::read_xls("/Users/materov/Downloads/2010-12-31_1-1T-ISDM.xls")
+wildfires_raw_2010$Dist <- stringr::str_replace(wildfires_raw_2010$Dist, '\\удаление ', '')
+wildfires_raw_2010$Dist <- stringr::str_replace(wildfires_raw_2010$Dist, '\\ км', '')
+wildfires_raw_2010$Dist %<>% as.numeric()
+
+wildfires_raw_2010$Azimuth <- stringr::str_replace(wildfires_raw_2010$Azimuth, '\\азимут ', '')
+wildfires_raw_2010$Azimuth <- stringr::str_replace(wildfires_raw_2010$Azimuth, '\\°', '')
+wildfires_raw_2010$Azimuth %<>% as.numeric()
+
+wildfires_raw_without_2017 <- read_csv("/Users/materov/Downloads/f2011_20.csv")
+wildfires_raw_2017 <- readxl::read_xls("/Users/materov/Downloads/2017-12-31_1-1T-ISDM.xls")
+
+wildfires_raw_2017$Dist <- stringr::str_replace(wildfires_raw_2017$Dist, '\\удаление ', '')
+wildfires_raw_2017$Dist <- stringr::str_replace(wildfires_raw_2017$Dist, '\\ км', '')
+wildfires_raw_2017$Dist %<>% as.numeric()
+
+wildfires_raw_2017$Azimuth <- stringr::str_replace(wildfires_raw_2017$Azimuth, '\\азимут ', '')
+wildfires_raw_2017$Azimuth <- stringr::str_replace(wildfires_raw_2017$Azimuth, '\\°', '')
+wildfires_raw_2017$Azimuth %<>% as.numeric()
+
+wildfires_raw <- dplyr::bind_rows(wildfires_raw_without_2017, wildfires_raw_2017)
+wildfires_raw <- dplyr::bind_rows(wildfires_raw, wildfires_raw_2010)
+
+wildfires <- wildfires_raw %>% 
+  select(Lon, Lat, Dist, Sdate, StateNY0, Place, Earea, TypeForest, Comment)
+
+# убираем из даты ликвидации "ликвидирован"
+wildfires$StateNY0 <- stringr::str_replace(wildfires$StateNY0, '\\ликвидирован ', '')
+
+# формат дат
+wildfires$Sdate    %<>% as.Date(., format = "%d.%m.%Y")
+wildfires$StateNY0 %<>% as.Date(., format = "%d.%m.%Y")
+
+# дата первого наблюдения: год, месяц
+wildfires <- wildfires %>% mutate(year  = lubridate::year(Sdate),
+                                  month = lubridate::month(Sdate, label = T))
+
+# количество дней от даты первого наблюдения до ликвидации
+wildfires <- wildfires %>% 
+  mutate(fire_duration = StateNY0 - Sdate)
+
+# удалим выброс
+wildfires <- wildfires %>% 
+  filter(!(Lat == 54.81111 & Lon == 103.63))
+
+# удалим 2010 год, поскольку там не хватает данных по координатам
+wildfires <- wildfires %>% 
+  filter(year >= 2011)
+```
+
+Приведем пример таблицы данных.
+
+```{r}
+wildfires %>%
+  head(., 10) %>% 
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+```
+
+Выделим переменные для анализа:
+
+- `Lon`, `Lat` -- географические координаты
+
+- `Dist` -- удаление от ближайшего населенного пункта
+
+- `Sdate` -- дата первого наблюдения
+
+- `StateNY0` -- дата ликвидации
+
+- `Place` -- лесничество
+
+- `Earea` -- площадь, пройденная огнем в субъекте РФ, га (всего)
+
+- `TypeForest` -- тип термоточки
+
+- `Comment` -- комментарий
+
+- `year`, `month` -- год и месяц
+
+- `fire_duration` -- длительность горения
+
+Набор исторических данных по лесным пожарам данных включает в себя всего `r format(nrow(wildfires), big.mark = " ")`  наблюдений, временной диапазон: с 2011 года по 2020 год. Наибольший интерес для исследования представляет географическое распределение пожаров и их динамика с течением времени. Отобразим термоточки на карте Красноярского края, для чего сначала загрузим несколько типов карт-подложек, предварительно определив их границы.
+
+```{r, warning=F, message=F}
+library(ggmap)
+
+KRSK <- c(left = 80, bottom = 50, right = 115, top = 78)
+half_KRSK <- c(left = 82, bottom = 50, right = 110, top = 66.34)
+quater_KRSK <- c(left = 86.5, bottom = 51.5, right = 103, top = 59)
+
+map <- get_stamenmap(KRSK, zoom = 6, maptype = "toner-background")
+half_map <- get_stamenmap(half_KRSK, zoom = 6, maptype = "toner-background")
+quater_map <- get_stamenmap(quater_KRSK, zoom = 6, maptype = "toner-background")
+```
+
+```{r krasmap, warning=FALSE, message=FALSE, fig.cap = "*Карта пожаров Красноярского края в 2011-2020 годах. Размер точки пропорционален площади пожара*", fig.height = 7, fig.width = 4}
+ggmap(map) +
+  geom_point(data = wildfires %>% 
+               dplyr::select(Lon, Lat, Earea, year) %>% na.omit(),
+             alpha = 0.025,
+             aes(Lon, Lat,
+                 size = Earea/1000),
+             color = "red"
+  ) + silgelib::theme_plex() +
+  guides(color = guide_legend(nrow = 2, 
+                              override.aes = list(alpha = 1, size = 4)),
+         size  = guide_legend(override.aes = list(alpha = 1))) +
+  labs(x = "", y = "", size = "площадь пожара, тыс. га:", color = "год:") +
+  theme(legend.position = "bottom", legend.box = "vertical",
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()
+        ) 
+```
+
+Нетрудно видеть, как распределены пожары в зависимости от сезона.
+
+```{r}
+wildfires <-
+wildfires %>% 
+  mutate(
+    season = case_when(
+      month %in% c("дек", "янв", "фев") ~ "зима",
+      month %in% c("мар", "апр", "май") ~ "весна",
+      month %in% c("июн", "июл", "авг") ~ "лето",
+      month %in% c("сен", "окт", "ноя") ~ "осень"
+    )
+  ) %>% 
+  mutate(season = factor(season, levels = c("зима", "весна", "лето", "осень"))) 
+```
+
+```{r krasmapseason, warning=FALSE, message=FALSE, fig.cap = "*Карта пожаров Красноярского края в 2011-2020 годах в зависимости от сезона*", fig.height = 6, fig.width = 10}
+ggmap(map) +
+  geom_point(data = wildfires %>% 
+               dplyr::select(Lon, Lat, Earea, year, season) %>% na.omit(),
+             alpha = 0.05,
+             aes(Lon, Lat,
+                 size = Earea/1000, color = season)
+  ) + silgelib::theme_plex() +
+  guides(color = guide_legend(nrow = 1, 
+                              override.aes = list(alpha = 1, size = 4)),
+         size  = guide_legend(override.aes = list(alpha = 1))) +
+  #labs(x = "", y = "", size = "площадь пожара, тыс. га:", color = "сезон:") +
+  theme(legend.position = "none", legend.box = "vertical",
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()
+  ) + 
+  facet_wrap(~season, nrow = 1)
+```
+
+
+Красноярский край является одним из самых протяженных регионов Российской Федерации, часть края находится за пределами Северного полярного круга. Количество пожаров, произошедших за 2011-2020 года севернее полярного круга составило чуть более 3%, поэтому мы будем в основном работать с пожарами, которые произошли на юге края. Предыдущий рисунок, к сожалению, не визуализирует интенсивность пожаров, один из хороших способов выявить локальные максимумы -- карта плотности пожаров, показанная на рисунке ниже. Актуальные данные по населенным пунктам были получены с сайта [ИНИД](https://www.data-in.ru/data-catalog/datasets/160/). 
+
+```{r, warning=F, message=F, echo=F}
+# https://data-in.ru/data-catalog/datasets/160/
+cities_large_set <- read_csv("/Users/materov/Downloads/settlements_12032021/data.csv")
+```
+
+```{r firedensity, warning=FALSE, message=FALSE, fig.cap = "*Карта пожаров южных районов Красноярского края в 2011-2020 годах. Цветом показаны районы с максимальной плотностью пожаров (светелее -- больше). Точки черного цвета соответствуют населенным пунктам края, размер точек пропорционален количеству населения*", fig.height = 7, fig.width = 7}
+
+cities_KRSK_krai <-
+  cities_large_set %>% 
+  filter(region == "Красноярский край") 
+
+ewbrks <- seq(90,100,5)
+nsbrks <- seq(52,60,2)
+
+ewlbls <- unlist(lapply(ewbrks, function(x) ifelse(x > 0, paste(x, "°E"), ifelse(x < 0, paste(x, "°W"),x))))
+nslbls <- unlist(lapply(nsbrks, function(x) ifelse(x < 0, paste(x, "°S"), ifelse(x > 0, paste(x, "°N"),x))))
+
+for_text <- arrange(cities_KRSK_krai, -population) %>% head(., 6) 
+
+library(ggrepel)
+set.seed(2021)
+
+ggmap(quater_map) +
+  stat_density_2d(data = wildfires %>% 
+                    rename(lon = Lon, lat = Lat) %>% 
+                    dplyr::filter(lat < 66.34), 
+                  aes(fill = stat(nlevel)), 
+                  geom = "polygon",
+                  n = 200, bins = 20, contour = TRUE, alpha = 0.3) +
+  silgelib::theme_plex() +
+  scale_x_continuous(breaks = ewbrks, labels = ewlbls, limits = c(86.5, 103)) +
+  scale_y_continuous(breaks = nsbrks, labels = nslbls, limits = c(51.5, 59)) +
+  theme(legend.position = "none") +
+  viridis::scale_fill_viridis(option = "inferno") +
+  geom_point(data = cities_KRSK_krai, aes(longitude_dd, latitude_dd, size = population), 
+             alpha = 0.6, color = "black") + 
+  ggrepel::geom_text_repel(data = for_text, face = "bold", 
+                           aes(longitude_dd, latitude_dd, label = settlement), bg.color = "white",
+                           bg.r = 0.25,alpha = 0.8,
+                           min.segment.length = 0, max.segment.length = Inf, box.padding = 4, size = 5) + 
+  scale_size(range = c(0, 10)) +
+  labs(x = "", y = "")
+```
+
+
+На рисунке хорошо видно, что пожары в южных районах края в основном происходили вблизи населенных пунктов, что подтверждает антропогенное влияние деятельности человека на пожары. Небольшое исследование данных показывает, что локальные максимумы плотности пожаров соответствуют: первый максимум 55°58′93″ с.ш., 90°04′23″ в.д., в районе которого находятся населенные пункты п. Красная Сопка и с. Крутояр; второй максимум имеет координаты 56°26′83″ с.ш., 95°65′61″ в.д. (пик второго максимума в 1,4 раза меньше первого), где находятся г. Канск, с. Филимоново, с. Чечеул.
+
+Исследуем вариацию пожаров в зависимости от года. На следующем рисунке можно хорошо проследить, что пожары с большой площадью более 10 000 га за период с 2011 по 2020 год сместились от западной к восточной границе Красноярского края.
+
+```{r firedynamicslarge, warning=FALSE, message=FALSE, fig.cap = "*Пожары площадью свыше 10 000 га в Красноярском крае в 2011-2020 годах. Размер точки пропорционален площади пожара, цвет соответствует году (темнее -- старше)*", fig.height = 6.5}
+
+ewbrks <- seq(85,110,10)
+nsbrks <- seq(50,70,4)
+
+ewlbls <- unlist(lapply(ewbrks, function(x) ifelse(x > 0, paste(x, "°E"), ifelse(x < 0, paste(x, "°W"),x))))
+nslbls <- unlist(lapply(nsbrks, function(x) ifelse(x < 0, paste(x, "°S"), ifelse(x > 0, paste(x, "°N"),x))))
+
+ggmap(half_map) +
+  geom_point(data = wildfires %>% dplyr::filter(Earea > 10000) %>% 
+               dplyr::select(Lon, Lat, Earea, year) %>% na.omit(),
+             alpha = 0.8,
+             aes(Lon, Lat,
+                 size = Earea/1000,
+                 color = factor(year))
+             ) +
+  silgelib::theme_plex() +
+  scale_x_continuous(breaks = ewbrks, labels = ewlbls, limits = c(85, 107)) +
+  scale_y_continuous(breaks = nsbrks, labels = nslbls, limits = c(51.5, 65)) +
+  guides(size  = guide_legend(override.aes = list(alpha = 1)), 
+    color = guide_legend(nrow = 2, override.aes = list(alpha = 1, size = 4))) +
+  viridis::scale_color_viridis(discrete = T, option = "cividis") +
+  labs(size = "площадь пожара, тыс. га:", x = "", y = "", color = "год:") +
+  theme(legend.position = "bottom", legend.box = "vertical") +
+  guides(size = guide_legend(order = 1))
+```
+
+Смещение крупных пожаров к восточной границе края имеет глобальный характер, что отмечалось, например, в работе [Результаты и перспективы спутникового мониторинга природных пожаров Сибири](https://сибирскийлеснойжурнал.рф/articles/archive/arkhiv-2017/ponomarev-e-i-kharuk-v-i-yakimov-n-d-rezultaty-i-perspektivy-sputnikovogo-monitoringa-prirodnykh-pozh/).
+Аналогичный характер вариации прослеживается и для относительно небольших пожарах.
+
+```{r firedynamicssmall, warning=FALSE, message=FALSE, fig.cap = "*Пожары площадью менее 1 000 га в Красноярском крае в 2011-2020 годах. Размер точки пропорционален площади пожара, цвет соответствует году (темнее -- старше)*", fig.height = 6.5}
+
+ewbrks <- seq(85,110,10)
+nsbrks <- seq(50,70,4)
+
+ewlbls <- unlist(lapply(ewbrks, function(x) ifelse(x > 0, paste(x, "°E"), ifelse(x < 0, paste(x, "°W"),x))))
+nslbls <- unlist(lapply(nsbrks, function(x) ifelse(x < 0, paste(x, "°S"), ifelse(x > 0, paste(x, "°N"),x))))
+
+ggmap(half_map) +
+  geom_point(data = wildfires %>% 
+               dplyr::filter(Earea < 1000) %>% 
+               dplyr::select(Lon, Lat, Earea, year) %>% na.omit(),
+             alpha = 0.3,
+             aes(Lon, Lat,
+                 size = Earea,
+                 color = factor(year))
+  ) + 
+  silgelib::theme_plex() +
+  scale_x_continuous(breaks = ewbrks, labels = ewlbls, limits = c(85, 107)) +
+  scale_y_continuous(breaks = nsbrks, labels = nslbls, limits = c(51.5, 66)) +
+  scale_size(range = c(0, 4.5)) +
+  guides(color = guide_legend(nrow = 2, 
+                              override.aes = list(alpha = 1, size = 4)),
+         size  = guide_legend(override.aes = list(alpha = 1))) +
+  viridis::scale_color_viridis(discrete = T, option = "cividis") +
+  labs(x = "", y = "", size = "площадь пожара, га:", color = "год:") +
+  theme(legend.position = "bottom", legend.box = "vertical")
+```
+
+
+## Моделирование
+
+
+Для моделирования методами машинного обучения мы будем использовать [tidymodels](https://www.tidymodels.org/) -- набор библиотек для моделирования основанных на принципах [tidy data](https://www.jstatsoft.org/article/view/v059i10), которые объединяет единый подход и грамматика проектирования. Хорошим источником по введению в моделирование на языке **R** является готовящаяся к публикации книга [Tidy Modeling with R](https://www.tmwr.org/). Далее рассмотрим основные этапы моделирования.
+
+В качестве примера мы рассмотрим модель, которая предсказывает, насколько близко пожар может подойти к населенному району. Выберем 5-километровую зону в качестве критической и введем новую переменную, которая принимает два значения: `далеко` (если пожар произошел на расстоянии более 5 км от населенного пункта) и `близко` (если пожар находится в критической 5-километровой зоне). 
+
+```{r}
+wildfires <-
+  wildfires %>% 
+  mutate(critical_distance = 
+           case_when(Dist <= 5 ~ "близко",
+                          TRUE ~ "далеко"))
+```
+
+```{r}
+wildfires_model <- wildfires %>% 
+  dplyr::select(critical_distance, Lon, Lat, Sdate, Place, Earea) %>% 
+  mutate_if(is.character, factor) %>% 
+  na.omit()
+
+wildfires_model %>%
+  head(., 10) %>% 
+  kbl() %>%
+  kable_paper("hover", full_width = F)
+```
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+N_blizko <- 
+wildfires_model %>% 
+  dplyr::filter(critical_distance == "близко") %>% 
+  nrow()
+
+N_total <- 
+  wildfires_model %>% 
+  nrow()
+
+blizko_percent <- round(100*N_blizko / N_total)
+```
+
+Таким образом, мы рассмотрим задачу классификации в зависимости от других предикторов. Согласно исходным данным, в 5-километровой зоне произошло `r format(N_blizko, big.mark = " ")` пожара, что составило чуть более `r format(blizko_percent, big.mark = " ")`% от общего числа пожаров за исследуемый период времени. Обратим внимание, что расстояние от фронта пожаров до населенных пунктов увеличивается с увеличением широты, поэтому широта должна быть одной из определяющих характеристик модели. 
+
+```{r distvslat, warning=FALSE, message=FALSE, fig.cap = "*Расстояние от фронта пожаров до населенных пунктов Красноярского края за период 2011-2020 гг. Каждая точка представляет собой возникновение пожара, кривая синего цвета представляет собой сглаживание методом подгонки локальной полиномиальной регрессии*", fig.height = 5}
+
+ewbrks <- seq(85,110,10)
+nsbrks <- seq(round(min(wildfires$Lat)), round(max(wildfires$Lat)),5)
+
+ewlbls <- unlist(lapply(ewbrks, function(x) ifelse(x > 0, paste(x, "°E"), ifelse(x < 0, paste(x, "°W"),x))))
+nslbls <- unlist(lapply(nsbrks, function(x) ifelse(x < 0, paste(x, "°S"), ifelse(x > 0, paste(x, "°N"),x))))
+
+wildfires %>% 
+  ggplot(aes(Dist, Lat)) + 
+  geom_point(alpha = 0.1) +
+  geom_smooth(se = F) +
+  scale_y_continuous(breaks = nsbrks, labels = nslbls, limits = range(wildfires$Lat)) +
+  silgelib::theme_plex() +
+  labs(x = "\nрасстояние до населенного пункта, км", y = "")
+```
+
+
+### 1. Разбиение выборки на два набора «обучающий» и «тестовый»
+
+Разделим выборку на два набора: «обучающий», составляющий большую часть данных, используемый для разработки и оптимизации модели, и «тестовый» набор для определения эффективности модели. В нашем случае мы разделим всю выборку в пропорции 80% / 20%.
+
+```{r}
+set.seed(123)
+wildfires_split <- initial_split(wildfires_model, prop = 0.8) 
+wildfires_train <- training(wildfires_split)
+wildfires_test  <- testing(wildfires_split)
+```
+
+Для ресамплинга геоданных в **R** также предусмотрена экспериментальная библиотека [spatialsample](https://spatialsample.tidymodels.org/), позволяющая формировать кластеры на основе широты и долготы на этапе разделения данных на обучающий и тестовый наборы, что улучшает результат моделирования. Мы разделим весь набор на 10 кластеров по географическому признаку.
+
+```{r}
+wildfires_folds <- spatialsample::spatial_clustering_cv(wildfires_train, 
+                                                        coords = c("Lon", "Lat"),
+                                                        v = 10)
+```
+
+```{r}
+wildfires_folds
+```
+
+
+### 2. Конструирование признаков (Feature Engineering) и декларация модели
+
+Данный этап включает в себя действия, которые переформатируют значения предикторов чтобы упростить их эффективное использование в модели. Это включает в себя преобразование и кодирование данных для наилучшего представления их важных характеристик, например, уменьшение выборки для учета дисбаланса классов, и др. Некоторые модели используют геометрические метрики расстояний, и, следовательно, числовые предикторы должны быть центрированы и масштабированы так, чтобы все они были в одних и тех же единицах измерения. Подготовка данных и Feature Engineering является одним из самых сложных этапов моделирования. Книги [Feature Engineering and Selection: A Practical Approach for Predictive Models](http://www.feat.engineering/) и [Feature Engineering Bookcamp](https://www.manning.com/books/feature-engineering-bookcamp?utm_source=sinano&utm_medium=affiliate&utm_campaign=book_ozdemir_feature_11_11_21&a_aid=sinano&a_bid=57655d6d) являются хорошим введением в предметную область.
+
+Для конструирования признаков используются команды начинающиеся с префикса `step_()` из библиотеки [recipes](https://recipes.tidymodels.org/). Командой `recipe()` устанавливается рабочий процесс модели (*model workflow*, называемый «рецептом»), здесь же указываются используемые данные и «формула», показывающая переменные модели и их зависимости (что является прогностическими параметрами – предикторами, а что искомым показателем). 
+
+```{r}
+wildfires_rec <- recipe(critical_distance ~ ., data = wildfires_model) %>%
+  step_date(Sdate) %>%
+  step_rm(Sdate) %>%
+  step_other(Place, threshold = 0.005, other = "Other") %>%
+  step_dummy(all_nominal(), -critical_distance) %>%            # dummy codes categorical variables
+  step_nzv(all_predictors(), freq_cut = 0, unique_cut = 0) %>% # remove variables with zero variances
+  themis::step_downsample(critical_distance)
+
+wildfires_rec
+```
+
+После этого выбирается модель: `tidymodels` предоставляет огромный спектр практически [всех известных моделей](https://www.tidymodels.org/find/parsnip/), включая модели `Deep Learning`. Модель декларируется с помощью команды `set_engine()`. Режим работы модели (классификация или регрессия) устанавливается командой `set_mode()`. В нашем случае это алгоритм «бэггинг» рассмотренный, например, в книге [Классификация, регрессия и другие алгоритмы Data Mining с использованием R](https://ranalytics.github.io/data-mining/044-Ensembles.html). Алгоритм «бэггинг» хорошо работает в классификационных задачах для географически распределенных данных что, например, отмечалось в статье [Big data integration shows Australian bush-fire frequency is increasing significantly](https://doi.org/10.1098/rsos.150241). Для более точной настройки можно использовать, например, алгоритм [XGBoost](https://xgboost.readthedocs.io/en/latest/R-package/xgboostPresentation.html).
+
+```{r}
+bag_spec <- baguette::bag_tree(min_n = 10) %>% 
+  set_engine("rpart", times = 20) %>% # 20 bootstrap resamples
+  set_mode("classification")
+
+bag_spec
+```
+
+### 3. Настройка гиперпараметров модели и оценка результатов с помощью метрик
+
+Соберем рабочий процесс модели.
+
+```{r}
+wildfires_wf <- workflow() %>%
+  add_recipe(wildfires_rec) %>%
+  add_model(bag_spec)
+
+wildfires_wf
+```
+
+Здесь происходит создание настраиваемой спецификации модели, а также настройка (в том числе автоматическая!) гиперпараметров модели и объедение ее с «рецептом», полученном на предыдущем этапе в рабочем процессе. Удобство `tidymodels` заключается в том, что мы можем создать несколько моделей на одном и том же наборе данных и затем сравнить их (например, сравнить линейную модель с моделью, полученной с помощью [Keras](https://keras.rstudio.com/)). Обучим модель используя параллельные вычисления.
+
+```{r}
+doParallel::registerDoParallel()
+wildfires_res <- fit_resamples(
+  wildfires_wf,
+  wildfires_folds,
+  control = control_resamples(save_pred = TRUE)
+)
+```
+
+Модель рассматривается на обучающей выборке и, по таблице метрик, проверяется, насколько хорошо выглядит результат моделирования (например, показатель метрики близок к 1).
+
+```{r}
+collect_metrics(wildfires_res)
+```
+
+### 4. Распространение модели на все множество и проверка точности 
+
+При распространении модели на тестовую выборку метрики пересчитываются заново. 
+
+```{r}
+wildfires_fit <- last_fit(wildfires_wf, wildfires_split)
+collect_metrics(wildfires_fit)
+```
+
+Далее рассматривается матрица ошибок, показывающая точность модели.
+
+```{r errormat1, warning=FALSE, message=FALSE, fig.cap = "*Матрица ошибок модели в виде тепловой карты*", fig.height = 5}
+collect_predictions(wildfires_fit) %>%
+  conf_mat(critical_distance, .pred_class) %>%
+  autoplot(., type = "heatmap")
+```
+
+```{r errormat2, warning=FALSE, message=FALSE, fig.cap = "*Матрица ошибок модели в виде мозаичной диаграммы*", fig.height = 4.5}
+collect_predictions(wildfires_fit) %>%
+  conf_mat(critical_distance, .pred_class) %>%
+  autoplot(., type = "mosaic")
+```
+
+Также, точность моделирования можно оценивать с помощью *ROC-кривой модели*. 
+
+```{r ROCcurve, warning=FALSE, message=FALSE, fig.cap = "*Матрица ошибок модели в виде тепловой карты*", fig.height = 4.5}
+wildfires_fit %>% 
+  collect_predictions() %>%
+  roc_curve(critical_distance, .pred_близко) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_line(size = 1.5, color = "midnightblue") +
+  geom_abline(
+    lty   = 2, 
+    alpha = 0.5,
+    color = "gray50",
+    size  = 1.2
+  ) +
+  coord_equal() +
+  silgelib::theme_plex()
+```
+
+Окончательно, если модель показывает удовлетворительные результаты, рассматривают значимость признаков модели. Как и ожидалось, наибольшую значимость имеют географические координаты.
+
+```{r}
+wildfires_imp <- wildfires_fit$.workflow[[1]] %>%
+  extract_fit_parsnip()
+```
+
+```{r importance, warning=FALSE, message=FALSE, fig.cap = "*Значимость предикторов*", fig.height = 6}
+wildfires_imp$fit$imp %>%
+  slice_max(value, n = 10) %>%
+  ggplot(aes(value, fct_reorder(term, value))) +
+  geom_col(alpha = 0.8, fill = "midnightblue") +
+  labs(x = "", y = "") +
+  scale_x_continuous(labels = function(x) format(x, big.mark = " ", scientific = FALSE)) +
+  silgelib::theme_plex()
+```
+
+С помощью гексагональной карты покажем процент правильно классифицированных пожаров. Для наглядности на карту нанесены населенные пункты.
+
+```{r}
+wildfires_pred <- 
+  wildfires_res %>%
+  collect_predictions() %>%
+  mutate(correct = (critical_distance == .pred_class) | ((critical_distance == "далеко") & (.pred_class == "близко")) ) %>% 
+  left_join(wildfires_train %>%
+              mutate(.row = row_number()))
+```
+
+```{r hexmap, warning=FALSE, message=FALSE, fig.cap = "*Гексагональная карта, показывающая процент правильно классифицированных пожаров по принадлежности 5-километровой зоне (от светлого – 0% к темному – 100%), на карту также нанесены населенные пункты*", fig.height = 6, fig.width = 8.5}
+library(ggmap)
+ggmap(quater_map) +
+  coord_cartesian() +
+  stat_summary_hex(
+    data = wildfires_pred,
+    aes(Lon, Lat, z = as.integer(correct)),
+    fun = "mean",
+    alpha = 0.8, bins = 40
+  ) +
+  viridis::scale_fill_viridis(labels = scales::percent, direction = -1) +
+  scale_x_continuous(breaks = ewbrks, labels = ewlbls, limits = c(87, 103)) +
+  scale_y_continuous(breaks = nsbrks, labels = nslbls, limits = c(52, 59)) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(alpha = 0.8))) +
+  silgelib::theme_plex() +
+  labs(x = NULL, y = NULL, 
+       fill = "Процент правильно\nклассифицированных\nпожаров\n", size = "население, тыс. чел.") +
+  geom_point(data = cities_KRSK_krai, 
+             aes(longitude_dd, latitude_dd, size = (population)/1000), alpha = 0.7, color = "black") +
+  scale_size(range = c(0, 10)) 
+```
+
+Точки на карте, соответствующие населенным пунктам, в основном лежат в диапазоне 25%--75% правильной классификации, территории около крупных населенных пунктов классифицируются хорошо.
+Мы видим, что несмотря на достаточно хорошую общую точность модели, для географически распределенных данных является актуальным улучшение локальной точности при моделировании на территориях с большими площадями, поскольку для удаленных участков (площадь которых может быть достаточно большой) модель может показывать хорошую точность, но не вблизи населенных пунктов, т.е. там, где это необходимо.
+
+## Заключение
+
+В статье был рассмотрен базовый анализ географически распределенных данных на примере ситуаций с лесными пожарами в Красноярском крае за период 2011-2020 года. Мы показали некоторые основные приемы работы с географическими данными, но не рассматривали, например, геостатистический анализ на основе моделирования вариограм, кригинга и т.д. Часть материала, который рассмотрен здесь, будет опубликована в рамках [HETS 2021: Международный научно-практический форум по проблемам устойчивого развития в цифровом мире: Человек. Экономика. Технологии. Социум](https://conferences.science/conferences/hets-2021.html) в сборнике статей издательства **Springer**.
+
+Рассмотренные в статье инструменты и модели имеют как теоретическое, так и практическое значение, например, для определения рисков приближения нелокализованных пожаров к критической 5-километровой зоне на основе оперативных данных вокруг населенного пункта или объекта инфраструктуры. Подходы, используемые здесь, могут быть аналогичным образом распространены на другие регионы Российской Федерации.
+Рассмотренная здесь простейшая модель машинного обучения в настоящий момент не учитывает множество сопутствующих показателей: метеоданные, Normalized Difference Vegetation Index (NDVI), и т.д. Более глубокий анализ аналогичного характера рассматривался в хакатоне [NoFireWithAI](https://github.com/sberbank-ai/no_fire_with_ai_aij2021), задачей которого являлось прогнозирование пожаров в Российской Федерации используя информацию на определенном участке внутри элементов сетки-разбиения всей территории РФ. Использование моделей машинного обучения позволило внедрить МЧС России мобильное приложение «Термические точки» для автоматического информирования о риске возгорания для ускоренного реагирования на природные пожары. Приложение получило высокую оценку специалистов и стало победителем [AI Russia Awards](https://ai-russia.ru/library/mchs) в номинации «Социально значимый проект».
+
+О современных глобальных тенденциях, текущих и прогнозируемых изменениях активности лесных пожаров можно прочитать в статье ниже.
+
+```{r tweet-from-dsquintana, echo=FALSE, warning=FALSE}
+library(tweetrmd)
+include_tweet("https://twitter.com/NatRevEarthEnv/status/1417395162397937667")
+```
+
+Автор выражает глубокую благодарность [Валерию Васильевичу Ничепорчуку](https://icm.krasn.ru/personal.php?persid=207), старшему научному сотруднику Института вычислительного моделирования СО РАН, за предоставленные данные, поддержку и полезные обсуждения.
+
+
+
+
+
+
+
+
+
+
