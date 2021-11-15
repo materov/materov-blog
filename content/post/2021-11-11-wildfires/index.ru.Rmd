@@ -483,7 +483,7 @@ collect_predictions(wildfires_fit) %>%
 
 Также, точность моделирования можно оценивать с помощью *ROC-кривой модели*. 
 
-```{r ROCcurve, warning=FALSE, message=FALSE, fig.cap = "*Матрица ошибок модели в виде тепловой карты*", fig.height = 4.5}
+```{r ROCcurve, warning=FALSE, message=FALSE, fig.cap = "*ROC-кривая модели*", fig.height = 4.5}
 wildfires_fit %>% 
   collect_predictions() %>%
   roc_curve(critical_distance, .pred_близко) %>%
