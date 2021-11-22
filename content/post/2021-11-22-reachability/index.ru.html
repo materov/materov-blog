@@ -1,0 +1,685 @@
+---
+title: Анализ степени достижимости географически распределенных объектов
+author: admin
+date: '2021-11-22'
+slug: reachability
+categories: ["R"]
+tags: ["rstats", "геоданные"]
+subtitle: 'пример анализа степени достижимости социально значимых объектов и объектов с массовым пребыванием людей на языке программирования R'
+summary: 'В статье будут рассмотрены возможности языка программирования R в применении к анализу расстояний между объектами городской структуры.'
+authors: 
+- admin
+lastmod: '2021-11-14T22:26:10+07:00'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index.ru_files/header-attrs/header-attrs.js"></script>
+<link href="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.css" rel="stylesheet" />
+<script src="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.js"></script>
+<script src="{{< blogdown/postref >}}index.ru_files/kePrint/kePrint.js"></script>
+<link href="{{< blogdown/postref >}}index.ru_files/lightable/lightable.css" rel="stylesheet" />
+
+
+<p><applause-button style="width: 58px; height: 58px;" color="#0C4047" multiclap="true"></applause-button></p>
+<p>Ранее в блоге были рассмотрены возможности языка программирования <strong>R</strong> в применении к построению географических карт городской инфраструктуры на основе базы данных местоположений <a href="https://www.openstreetmap.org/">OpenStreetMap</a>. В одной из <a href="https://materov-blog.netlify.app/post/geodata-fire/">предыдущих записей</a> блога было показано, как средствами <strong>R</strong> можно отобразить на карте города пожары, исследовать их простейшие характеристики и сделать карту плотностей пожаров.
+В продолжении исследования такого рода, изучим вопрос о степени достижимости возможных объектов пожара пожарно-спасательными подразделениями. Отметим, что особое внимание при оценке расстояния и времени прибытия подразделениями должно уделяться социально значимым объектам и объектам с массовым пребыванием людей.
+Аналогом библиотек, использованных здесь, является библиотека <a href="https://github.com/gboeing/osmnx">OSMnx</a> языка <strong>Python</strong>.</p>
+<p>Загрузим необходимые для работы библиотеки. Для получения данных с <strong>OpenStreetMap</strong> используется библиотека <code>osmdata</code>, для работы с геоданными – библиотека <code>sf</code>, библиотека <code>osrm</code> является связующим звеном между <strong>R</strong> и сервисом <a href="http://project-osrm.org/">OSRM</a> для определения расстояния между объектами, времени движения и кратчайшего пути.</p>
+<pre class="r"><code>library(tidyverse)
+library(magrittr)
+library(kableExtra)
+
+# для работы с геоданными
+library(osmdata)
+library(osrm)
+library(sf)
+
+# annotation scale
+library(ggspatial)
+
+`%!in%` = Negate(`%in%`)</code></pre>
+<div id="построение-базовой-карты" class="section level2">
+<h2>Построение базовой карты</h2>
+<p>В первую очередь, нам понадобится базовая карта-подложка города или его района. Идея карты такого рода принадлежит <a href="https://twitter.com/taraskaduk">Taras Kaduk</a> и рассмотрена в <a href="https://taraskaduk.com/posts/2021-01-18-print-street-maps/">блоге на примере Киева</a>. Фиксируем город (в нашем случае – Красноярск) и значения ключа <code>highway</code> для загрузки c <strong>OpenStreetMap</strong>.</p>
+<pre class="r"><code>my_place &lt;- &quot;Krasnojarsk Russia&quot;
+
+highway_sizes &lt;- tibble::tribble(
+          ~highway, ~highway_group, ~size,
+        &quot;motorway&quot;,        &quot;large&quot;,   0.5,
+   &quot;motorway_link&quot;,        &quot;large&quot;,   0.3,
+         &quot;primary&quot;,        &quot;large&quot;,   0.5,
+    &quot;primary_link&quot;,        &quot;large&quot;,   0.3,
+       &quot;secondary&quot;,        &quot;medium&quot;,  0.3,
+  &quot;secondary_link&quot;,        &quot;medium&quot;,  0.3,
+        &quot;tertiary&quot;,        &quot;medium&quot;,  0.3,
+   &quot;tertiary_link&quot;,        &quot;medium&quot;,  0.3,
+     &quot;residential&quot;,        &quot;small&quot;,   0.2,
+   &quot;living_street&quot;,        &quot;small&quot;,   0.2,
+    &quot;unclassified&quot;,        &quot;small&quot;,   0.2,
+         &quot;service&quot;,        &quot;small&quot;,   0.2,
+         &quot;footway&quot;,        &quot;small&quot;,   0.2
+  )</code></pre>
+<p>Получим картографические данные, включающие в себя дорожную сеть улиц, железные дороги и водные объекты – реки и озера.</p>
+<pre class="r"><code># streets
+streets_osm &lt;- opq(my_place) %&gt;%
+  add_osm_feature(key = &quot;highway&quot;, 
+                  value = highway_sizes$highway) %&gt;%
+  osmdata_sf() %&gt;% 
+  unname_osmdata_sf()</code></pre>
+<pre class="r"><code>streets &lt;- streets_osm$osm_lines %&gt;% 
+  dplyr::select(osm_id, name, name.en, highway, maxspeed, oneway, surface) %&gt;% 
+  mutate(length = as.numeric(st_length(.))) %&gt;% 
+  left_join(highway_sizes, by=&quot;highway&quot;) %&gt;% 
+  dplyr::filter(highway_group != &quot;small&quot; | length &gt;= quantile(length, probs = 0.25))</code></pre>
+<pre class="r"><code># railways
+railways &lt;- getbb(my_place) %&gt;%
+  opq()%&gt;%
+  add_osm_feature(key = &quot;railway&quot;, 
+                  value = &quot;rail&quot;) %&gt;%
+  osmdata_sf()
+
+railways_osm &lt;- opq(my_place) %&gt;%
+  add_osm_feature(key = &quot;railway&quot;, value=&quot;rail&quot;) %&gt;%
+  osmdata_sf() %&gt;% 
+  unname_osmdata_sf()
+
+railways &lt;- railways_osm$osm_lines %&gt;% 
+  dplyr::select()</code></pre>
+<pre class="r"><code># water
+water_osm &lt;- opq(my_place) %&gt;%
+  add_osm_feature(key = &quot;natural&quot;, value = &quot;water&quot;) %&gt;%
+  osmdata_sf() %&gt;% 
+  unname_osmdata_sf()
+
+river_osm &lt;- opq(my_place) %&gt;%
+  add_osm_feature(key = &quot;waterway&quot;, value = c(&quot;river&quot;, &quot;riverbank&quot;)) %&gt;%
+  osmdata_sf() %&gt;% 
+  unname_osmdata_sf()
+
+water &lt;- 
+  c(water_osm, river_osm) %&gt;% 
+  .$osm_multipolygons %&gt;% 
+  dplyr::select(osm_id, name) </code></pre>
+<p>Для отрисовки базовой темы в библиотеке <code>ggplot2</code> сделаем необходимые настройки.</p>
+<pre class="r"><code>blankbg &lt;- theme(axis.line=element_blank(),
+                axis.text.x=element_blank(),
+                axis.text.y=element_blank(),
+                axis.ticks=element_blank(),
+                axis.title.x=element_blank(), 
+                axis.title.y=element_blank(),
+                legend.position = &quot;top&quot;,
+                plot.background=element_blank(),
+                panel.grid.minor=element_blank(),
+                panel.background=element_blank(),
+                panel.grid.major=element_blank(),
+                plot.margin = unit(c(t=1,r=1,b=1,l=1), &quot;cm&quot;),
+                plot.caption = element_text(color = &quot;grey20&quot;, size = 40, 
+                                            hjust = .5, face = &quot;plain&quot;, 
+                                            family = &quot;Playfair Display SC&quot;),
+                panel.border = element_blank()
+)</code></pre>
+<p>Создадим базовую карту, нанеся на нее соответствующие объекты.</p>
+<pre class="r"><code>base_map &lt;-
+  ggplot() +
+  blankbg +
+  geom_sf(data = water,
+          fill = &quot;steelblue&quot;,
+          lwd = 0,
+          alpha = 0.3) +
+  geom_sf(data = railways,
+          color = &quot;grey30&quot;,
+          size = 0.2,
+          linetype=&quot;dotdash&quot;,
+          alpha = 0.5) +
+  geom_sf(data = streets %&gt;% 
+            dplyr::filter(highway_group == &quot;small&quot;),
+          size = 0.1,
+          color = &quot;grey40&quot;) +
+  geom_sf(data = streets %&gt;% 
+            dplyr::filter(highway_group == &quot;medium&quot;),
+          size = 0.3,
+          color = &quot;grey35&quot;) +
+  geom_sf(data = streets %&gt;% 
+            dplyr::filter(highway_group == &quot;large&quot;),
+          size = 0.5,
+          color = &quot;grey30&quot;) </code></pre>
+<p>Карта-подложка готова, теперь можно использовать ее элементы для отображения всего города или его части. Варьируя границы, мы можем получить карту достаточно подробного масштаба.</p>
+<pre class="r"><code>##################
+# 1. базовая карта
+##################
+
+base_map_KRSK &lt;- base_map + labs(caption = &quot;Красноярск&quot;) +
+  # географические границы города
+  coord_sf(xlim = c(92.64, 93.26), 
+           ylim = c(55.90, 56.14),
+           expand = FALSE)
+
+base_map_KRSK</code></pre>
+<div class="figure"><span style="display:block;" id="fig:basesmap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/basesmap-1.png" alt="*Базовая карта города Красноярска*" width="1056" />
+<p class="caption">
+Рисунок 1: <em>Базовая карта города Красноярска</em>
+</p>
+</div>
+</div>
+<div id="пример-нанесения-на-карту-города-различных-объектов-и-ограниченных-зон" class="section level2">
+<h2>Пример нанесения на карту города различных объектов и ограниченных зон</h2>
+<p>Помимо карты-подложки нам понадобятся средства нанесения на карту объектов, например, пожарных частей. Отметим, что в картографии объекты должны рассматриваться в соответствующей <a href="https://ru.wikipedia.org/wiki/Список_картографических_проекций">географической проекции</a>, которая учитывает искажения Земли. В <strong>R</strong> библиотека <code>sf</code> позволяет сделать перевод в географическую систему координат <em>CRS (coordinate reference system)</em>.</p>
+<pre class="r"><code># fire station points
+# Krasnoyarsk
+
+fire_stations &lt;-
+  tribble(
+    ~name, ~geo_lon, ~geo_lat,
+    &quot;СПСЧ по тушению крупных пожаров&quot;, 92.748411, 55.990467,
+    &quot;СПСЧ ФПС&quot;, 92.928354, 56.110927,
+    &quot;ПСЧ-1&quot;, 92.873629, 56.013482,
+    &quot;ПСЧ-2&quot;, 93.014530, 56.021645,
+    &quot;ПСЧ-3&quot;, 92.772450, 56.048354,
+    &quot;ПСЧ-8&quot;, 92.943169, 56.003085,
+    &quot;ПСЧ-17&quot;, 92.942607, 56.070102,
+    &quot;ПСЧ-4&quot;, 92.886657, 56.023958,
+    &quot;ПСЧ-19&quot;, 92.819819, 56.011077,
+    &quot;ПСЧ-20&quot;, 92.903523, 55.973193,
+    &quot;ОП ПСЧ-20&quot;, 92.860805, 55.986892,
+    &quot;ПСЧ-10&quot;, 92.835774, 55.976969
+  )
+
+# set CRS (coordinate reference system) projection for points
+fire_stations_points &lt;- fire_stations %&gt;% 
+  st_as_sf(coords = c(&quot;geo_lon&quot;, &quot;geo_lat&quot;), crs = 4326)</code></pre>
+<p>Нанесем пожарные части на карту города.</p>
+<pre class="r"><code>##############################################
+# 2. нанесение пожарных частей на карту города
+##############################################
+
+base_map + 
+  # нанесение пожарных частей на карту города
+  geom_sf(data = fire_stations_points,
+          color = &quot;blue&quot;, alpha = 1, shape = 8, size = 2.5, stroke = 1
+  ) +
+  # географические границы города
+  coord_sf(xlim = c(92.723, 93.0407), 
+           ylim = c(55.9623, 56.12185),
+           expand = FALSE) + 
+  theme(legend.position = &quot;none&quot;) +
+  ggrepel::geom_label_repel(data = fire_stations, aes(geo_lon, geo_lat, label = name), 
+                            fontface = &#39;bold&#39;,
+                            size = 3, alpha = 0.9) +
+  annotation_scale(location = &quot;tl&quot;, width_hint = 0.5, style = &quot;ticks&quot;)</code></pre>
+<div class="figure"><span style="display:block;" id="fig:firestationsmap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/firestationsmap-1.png" alt="*Карта пожарно-спасательных подразделений города Красноярска*" width="768" />
+<p class="caption">
+Рисунок 2: <em>Карта пожарно-спасательных подразделений города Красноярска</em>
+</p>
+</div>
+<p>Если бы мы, скажем, решали задачу распределения районов выезда пожарных частей в терминах евклидова расстояния, без учета сети дорог и времени движения пожарного автомобиля, задача решалась бы достаточно просто, используя <a href="https://ru.wikipedia.org/wiki/Диаграмма_Вороного">диаграммы Вороного</a>.
+Напомним, что диаграмма Вороного конечного множества точек <span class="math inline">\(S\)</span> на плоскости представляет такое разбиение плоскости, при котором каждая область этого разбиения образует множество точек, более близких к одному из элементов множества <span class="math inline">\(S\)</span>, чем к любому другому элементу множества.</p>
+<pre class="r"><code>######################################################
+# 3. пожарные части + диаграмма Вороного для разбиения
+######################################################
+
+library(ggvoronoi)
+
+base_map + 
+  # нанесение пожарных частей на карту города
+  geom_sf(data = fire_stations_points,
+          color = &quot;blue&quot;, alpha = 1, shape = 8, size = 2.5, stroke = 1
+  )  + 
+  theme(legend.position = &quot;none&quot;) +
+  # диаграммы Вороного
+  geom_path(data = fire_stations, 
+            aes(x = geo_lon, y = geo_lat),
+            stat = &quot;voronoi&quot;, alpha = 0.8, size = 0.6, color = &quot;blue&quot;) +
+  # географические границы города
+  coord_sf(xlim = c(92.723, 93.0407), 
+           ylim = c(55.9623, 56.12185),
+           expand = FALSE) +
+  ggrepel::geom_label_repel(data = fire_stations, aes(geo_lon, geo_lat, label = name), 
+                            fontface = &#39;bold&#39;,
+                            size = 3, alpha = 0.9) +
+  annotation_scale(location = &quot;tl&quot;, width_hint = 0.5, style = &quot;ticks&quot;)</code></pre>
+<div class="figure"><span style="display:block;" id="fig:voronoimap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/voronoimap-1.png" alt="*Пример разбиения карты на диаграммы Вороного*" width="768" />
+<p class="caption">
+Рисунок 3: <em>Пример разбиения карты на диаграммы Вороного</em>
+</p>
+</div>
+<p>Районы выезда зачастую совпадают с границами районов города. Загрузим границы районов с <strong>OpenStreetMap</strong>, указав значение для ключа <code>admin_level</code> равным 9, согласно <a href="https://wiki.openstreetmap.org/wiki/RU:Tag:boundary%3Dadministrative">таблице деления на административные единицы</a>.</p>
+<pre class="r"><code>rayony_osm &lt;- opq(my_place) %&gt;%
+  add_osm_feature(key = &quot;admin_level&quot;, value = 9) %&gt;%
+  osmdata_sf() %&gt;% 
+  unname_osmdata_sf()
+
+rayony1 &lt;- c(rayony_osm) %&gt;% 
+  .$osm_multipolygons %&gt;% 
+  dplyr::select(osm_id, name) %&gt;% 
+  mutate(area = st_area(.)) 
+
+rayony2 &lt;- c(rayony_osm) %&gt;% 
+  .$osm_polygons %&gt;% 
+  dplyr::select(osm_id, name) %&gt;% 
+  mutate(area = st_area(.)) 
+
+rayony &lt;- bind_rows(rayony1, rayony2)
+regions &lt;- cbind(rayony, st_coordinates(st_centroid(rayony)))
+
+regions %&lt;&gt;% mutate(region_area = area)
+regions$region_area %&lt;&gt;% as.numeric()</code></pre>
+<p>Нанесем районы на карту города Красноярска.</p>
+<pre class="r"><code>set.seed(123)
+base_map +
+  geom_sf(data = regions, aes(fill = region_area/1000000), color = &quot;black&quot;, alpha = 0.68) + 
+  viridis::scale_fill_viridis(discrete = F, option = &quot;viridis&quot;, direction = 1) +
+  # нанесение пожарных частей на карту города
+  geom_sf(data = fire_stations_points,
+          color = &quot;blue&quot;, alpha = 1, shape = 8, size = 2.5, stroke = 1
+  )  + 
+  theme(legend.position = &quot;none&quot;) +
+  labs(fill = &quot;площадь района (в кв. км):&quot;) +
+  ggrepel::geom_text_repel(data = regions, aes(X, Y - 4*0.01/5, label = name, color = I(&quot;black&quot;)), 
+                           color = &quot;white&quot;,     
+                           bg.color = &quot;grey30&quot;, 
+                           bg.r = 0.15,          
+                           size = 5, alpha = 0.9) +
+  ggrepel::geom_label_repel(data = fire_stations, 
+                            aes(geo_lon, geo_lat, label = name), 
+                            box.padding = 0.5, fontface = &#39;bold&#39;,
+                            size = 3, alpha = 0.9) +
+  coord_sf(xlim = c(92.696, 93.06979), 
+           ylim = c(55.9598, 56.131), 
+           expand = FALSE) +
+  theme(legend.key.size = unit(.5,&quot;cm&quot;),
+        legend.key.width = unit(1.5,&quot;cm&quot;),
+        legend.position = &quot;top&quot;)</code></pre>
+<div class="figure"><span style="display:block;" id="fig:regionsmap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/regionsmap-1.png" alt="*Основные пожарные части г. Красноярска по районам города*" width="768" />
+<p class="caption">
+Рисунок 4: <em>Основные пожарные части г. Красноярска по районам города</em>
+</p>
+</div>
+<p>Общая задача определения районов выезда пожарно-спасательных подразделений с учетом нормативной базы и дорожно-транспортной обстановки является довольно сложной, подходы к ее решению будут опубликованы в дальнейшей работе.</p>
+</div>
+<div id="анализ-зон-транспортной-доступности" class="section level2">
+<h2>Анализ зон транспортной доступности</h2>
+<p>Нам понадобится база данных объектов, до которых будет вычисляться время прибытия. Пример структуры такой таблицы показан ниже.</p>
+<pre class="r"><code>########################################
+# 4. анализ зон транспортной доступности
+########################################
+
+gis_base_KRSK %&gt;% 
+  na.omit() %&gt;% 
+  head(5)  %&gt;% 
+  kbl() %&gt;%
+  kable_paper(&quot;hover&quot;, full_width = T)</code></pre>
+<table class=" lightable-paper lightable-hover" style="font-family: &quot;Arial Narrow&quot;, arial, helvetica, sans-serif; margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;">
+street_1
+</th>
+<th style="text-align:left;">
+number_1
+</th>
+<th style="text-align:left;">
+city
+</th>
+<th style="text-align:left;">
+purpose
+</th>
+<th style="text-align:left;">
+name
+</th>
+<th style="text-align:left;">
+post_index
+</th>
+<th style="text-align:right;">
+geo_lon
+</th>
+<th style="text-align:right;">
+geo_lat
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+Светлова
+</td>
+<td style="text-align:left;">
+36
+</td>
+<td style="text-align:left;">
+Красноярск
+</td>
+<td style="text-align:left;">
+Школа
+</td>
+<td style="text-align:left;">
+Школа №156
+</td>
+<td style="text-align:left;">
+660132
+</td>
+<td style="text-align:right;">
+92.89857
+</td>
+<td style="text-align:right;">
+56.11293
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Восточная
+</td>
+<td style="text-align:left;">
+2а
+</td>
+<td style="text-align:left;">
+Железногорск (ЗАТО Железногорск городской округ)
+</td>
+<td style="text-align:left;">
+Школа
+</td>
+<td style="text-align:left;">
+Юбилейный, санаторий-профилакторий
+</td>
+<td style="text-align:left;">
+662970
+</td>
+<td style="text-align:right;">
+93.54588
+</td>
+<td style="text-align:right;">
+56.25072
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Комсомольская
+</td>
+<td style="text-align:left;">
+6
+</td>
+<td style="text-align:left;">
+Дивногорск (Дивногорск городской округ)
+</td>
+<td style="text-align:left;">
+Культурное учреждение
+</td>
+<td style="text-align:left;">
+Энергетик, дворец культуры
+</td>
+<td style="text-align:left;">
+663090
+</td>
+<td style="text-align:right;">
+92.37971
+</td>
+<td style="text-align:right;">
+55.96313
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Студенческий проспект
+</td>
+<td style="text-align:left;">
+6
+</td>
+<td style="text-align:left;">
+Дивногорск (Дивногорск городской округ)
+</td>
+<td style="text-align:left;">
+Вокзал
+</td>
+<td style="text-align:left;">
+Дивногорск, железнодорожный вокзал
+</td>
+<td style="text-align:left;">
+663093
+</td>
+<td style="text-align:right;">
+92.38073
+</td>
+<td style="text-align:right;">
+55.96423
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Комсомольская
+</td>
+<td style="text-align:left;">
+2
+</td>
+<td style="text-align:left;">
+Дивногорск (Дивногорск городской округ)
+</td>
+<td style="text-align:left;">
+Административное здание
+</td>
+<td style="text-align:left;">
+Администрация г. Дивногорск
+</td>
+<td style="text-align:left;">
+663090
+</td>
+<td style="text-align:right;">
+92.38190
+</td>
+<td style="text-align:right;">
+55.96265
+</td>
+</tr>
+</tbody>
+</table>
+<p>Выберем школы города Красноярска в качестве примера социально значимых объектов исследования.</p>
+<pre class="r"><code>schools_KRSK &lt;- gis_base_KRSK %&gt;% 
+  filter(city == &quot;Красноярск&quot;) %&gt;% 
+  filter(purpose %in% c(&quot;Школа&quot;)) %&gt;% 
+  # исключим школу в Овсянке
+  filter(street_1 %!in% c(&quot;Гагарина (Молодёжный)&quot;))
+
+schools_KRSK$geo_lon %&lt;&gt;% as.numeric()
+schools_KRSK$geo_lat %&lt;&gt;% as.numeric()
+
+schools_points_KRSK &lt;- schools_KRSK %&gt;% 
+  st_as_sf(coords = c(&quot;geo_lon&quot;, &quot;geo_lat&quot;), crs = 4326)</code></pre>
+<p>Нанесем школы города на карту.</p>
+<pre class="r"><code>base_map + 
+  # нанесение школ
+  geom_sf(data = schools_points_KRSK,
+          color = &quot;blue&quot;, alpha = 1, shape = 15, size = 2.5, stroke = 1
+  ) +
+  # географические границы города
+  coord_sf(xlim = c(92.696, 93.06979), 
+           ylim = c(55.9598, 56.131),
+           expand = FALSE) + 
+  theme(legend.position = &quot;none&quot;) +
+  annotation_scale(location = &quot;tl&quot;, width_hint = 0.5, style = &quot;ticks&quot;)</code></pre>
+<div class="figure"><span style="display:block;" id="fig:schoolsmap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/schoolsmap-1.png" alt="*Школы города Красноярска*" width="864" />
+<p class="caption">
+Рисунок 5: <em>Школы города Красноярска</em>
+</p>
+</div>
+<p>Извлечем геометрические данные из исследуемых точек.</p>
+<pre class="r"><code># options for routing server
+# options(osrm.server = &quot;https://routing.openstreetmap.de/&quot;, osrm.profile = &quot;car&quot;)
+
+schools_WGS &lt;- schools_points_KRSK %&gt;% 
+  st_transform(crs = 4326) %&gt;% 
+  dplyr::select(-street_1, -number_1, -city, -purpose, -name, -post_index) 
+
+fire_stations_points_WGS &lt;- fire_stations_points %&gt;% 
+  st_transform(crs = 4326) </code></pre>
+<p>Для последующей работы разобьем школы на две группы, например, по <span class="math inline">\(&lt; 70\)</span> значений. Если этого не сделать, то количество запросов к <a href="https://overpass-turbo.eu/">Overpass API</a>, который отвечает за работу с расстояниями между точками, превысит критическое значение.</p>
+<pre class="r"><code>N_split = 70
+
+schools_WGS &lt;-
+schools_WGS %&gt;% 
+  mutate(id = dplyr::row_number() %/% N_split + 1) 
+
+schools_WGS &lt;- schools_WGS %&gt;%
+  group_by(id)</code></pre>
+<pre class="r"><code>schools_WGS_1      &lt;- group_split(schools_WGS)[[1]] %&gt;% st_transform(crs = 4326) 
+schools_WGS_2      &lt;- group_split(schools_WGS)[[2]] %&gt;% st_transform(crs = 4326) 
+fire_stations_points_WGS &lt;- fire_stations_points</code></pre>
+<p>Далее вычисляются матрицы времен прибытия (без учета траффика) автомобилей от пожарных частей до интересующих нас школ города. К сожалению, минусом библиотеки <code>osrm</code> является то, что мы не можем задавать скорость движущегося объекта, однако, к достоинствам библиотеки следует отнести возможность учета дорог с односторонним движением и направления дорожного движения.</p>
+<pre class="r"><code># матрица расстояний 
+# если присутствует более (&gt; 70) значений, 
+# необходимо разбивать множество на 2 части,
+# поскольку API обрабатывает 1 запрос в секунду
+
+distancetable_1 = osrmTable(src = fire_stations_points_WGS, dst = schools_WGS_1)
+distancetable_2 = osrmTable(src = fire_stations_points_WGS, dst = schools_WGS_2)</code></pre>
+<p>Следующий шаг – вычисление минимумов по каждому из столбцов матрицы расстояний (здесь столбец матрицы отвечает школе, строка – пожарной части, значение на пересечении – время прибытия). На этом этапе мы каждой школе приписываем минимальное время, за которое можно ее достигнуть из <strong>ближайшей пожарной части</strong>.</p>
+<pre class="r"><code># минимальные расстояния по всем пожарным частям
+
+schools_WGS_1 &lt;-
+  schools_WGS_1 %&gt;% 
+  mutate(mintime = distancetable_1$durations %&gt;% 
+           as_tibble() %&gt;% summarise(across(where(is.numeric), min)) %&gt;% 
+           t() %&gt;% 
+           as.vector(.))
+
+schools_WGS_2 &lt;-
+  schools_WGS_2 %&gt;% 
+  mutate(mintime = distancetable_2$durations %&gt;% 
+           as_tibble() %&gt;% 
+           summarise(across(where(is.numeric), min)) %&gt;% 
+           t() %&gt;% 
+           as.vector(.))</code></pre>
+<p>Объединим результаты двух множеств разбиения.</p>
+<pre class="r"><code>schools_WGS_points &lt;- bind_rows(schools_WGS_1, schools_WGS_2) %&gt;% 
+  st_as_sf(coords = c(&quot;geo_lon&quot;, &quot;geo_lat&quot;), crs = 4326)</code></pre>
+<p>Нанесем результат на карту.</p>
+<pre class="r"><code>base_map + 
+  # нанесение школ
+  geom_sf(data = schools_WGS_points, 
+          aes(color = mintime),
+          alpha = 1, shape = 15, size = 2.5, stroke = 1
+  ) +
+  # нанесение пожарных частей на карту города
+  geom_sf(data = fire_stations_points,
+          color = &quot;blue&quot;, alpha = 1, shape = 8, size = 2.5, stroke = 1
+  ) +
+  viridis::scale_color_viridis(option = &quot;plasma&quot;, 
+                               direction = -1, 
+                               limits = c(0, 10), 
+                               breaks=c(0, 2, 4, 6, 8, 10)) +
+  # географические границы города
+  coord_sf(xlim = c(92.696, 93.06979), 
+           ylim = c(55.9598, 56.131),
+           expand = FALSE) + 
+  theme(legend.position = &quot;top&quot;) +
+  labs(color = &quot;время прибытия (мин.):&quot;) +
+  annotation_scale(location = &quot;tl&quot;, width_hint = 0.5, style = &quot;ticks&quot;) +
+  theme(legend.key.size = unit(.5,&quot;cm&quot;),
+        legend.key.width = unit(1.5,&quot;cm&quot;)) +
+  ggrepel::geom_label_repel(data = fire_stations, 
+                            aes(geo_lon, geo_lat, label = name), 
+                            fontface = &#39;bold&#39;,
+                            size = 3, alpha = 0.9)</code></pre>
+<div class="figure"><span style="display:block;" id="fig:schoolsmapreachability"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/schoolsmapreachability-1.png" alt="*Достижимость школ из пожарно-спасательных подразделений г. Красноярска*" width="864" />
+<p class="caption">
+Рисунок 6: <em>Достижимость школ из пожарно-спасательных подразделений г. Красноярска</em>
+</p>
+</div>
+<p>Теперь достаточно просто выяснить, до каких объектов время достижимости составит <span class="math inline">\(&gt; 10\)</span> минут. Легко видеть, что для школ города Красноярска требование по 10-минутному прибытию к возможному месту пожара выполнено.</p>
+<pre class="r"><code>schools_WGS_points %&gt;% 
+  mutate(
+    late_category = case_when(
+      mintime &gt; 10 ~ &quot;&gt; 10 мин&quot;,
+              TRUE ~ &quot;&lt;= 10 мин&quot;
+    )
+  ) %&gt;%
+  janitor::tabyl(late_category) %&gt;%
+  janitor::adorn_pct_formatting(digits = 0) %&gt;% 
+  purrr::set_names(&quot;категория&quot;, &quot;количество&quot;, &quot;процент&quot;)</code></pre>
+<pre><code>##  категория количество процент
+##  &lt;= 10 мин        137    100%</code></pre>
+<p>К сожалению, аналогичный анализ в городе Новосибирске показывает, что для некоторых школ города время прибытия составит много больше 10 минут.</p>
+</div>
+<div id="построение-оптимальных-маршрутов" class="section level2">
+<h2>Построение оптимальных маршрутов</h2>
+<p>Покажем, как можно строить оптимальные маршруты в библиотеке <code>osrm</code>. Выберем две произвольных точки соответствующие школе и пожарной части.</p>
+<pre class="r"><code>#####################################
+# 5. построение оптимальных маршрутов 
+#####################################
+
+schools_WGS_sample &lt;- schools_points_KRSK %&gt;% 
+  st_transform(crs = 4326) %&gt;% 
+  dplyr::select(-city, -purpose, -name, -post_index) %&gt;% 
+  head(1)
+
+fire_stations_points_WGS_sample &lt;- fire_stations_points %&gt;% 
+  st_transform(crs = 4326) %&gt;% 
+  head(1)</code></pre>
+<p>Построим оптимальный маршрут движения между от первой до второй выбранной точки пользуясь командой <code>osrmRoute</code>.</p>
+<pre class="r"><code>route &lt;- osrmRoute(src = fire_stations_points_WGS_sample, dst = schools_WGS_sample,
+                   overview = &quot;full&quot;, returnclass = &quot;sf&quot;)</code></pre>
+<p>Мы видим, что время движения составило 32 минуты, длина маршрута равна 22 километра. На карте ниже можно видеть построение маршрута.</p>
+<pre class="r"><code>base_map + geom_sf(data = route, color = &quot;red&quot;, size = 1) +
+  # географические границы города
+  coord_sf(xlim = c(92.723, 93.0407), 
+           ylim = c(55.9623, 56.05),
+           expand = FALSE)</code></pre>
+<div class="figure"><span style="display:block;" id="fig:routemap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/routemap-1.png" alt="*Пример построения оптимального маршрута*" width="864" />
+<p class="caption">
+Рисунок 7: <em>Пример построения оптимального маршрута</em>
+</p>
+</div>
+</div>
+<div id="построение-изохрон" class="section level2">
+<h2>Построение изохрон</h2>
+<p>Важной задачей является нахождение изохрон ограничивающих области, куда автомобиль может доехать за определенное время из исходной точки. В нашем случае расчетное время движения составляет 10 минут. Команда <code>osrmIsochrone</code> строит изохроны для выбранного объекта. Построим изохрону, например, для ПСЧ-17 города Красноярска.</p>
+<pre class="r"><code>fire_stations_points_WGS_iso_sample &lt;- fire_stations_points %&gt;% 
+  dplyr::filter(name == &quot;ПСЧ-17&quot;) %&gt;% 
+  st_transform(crs = 4326)
+
+bks &lt;- seq(from = 0, to = 10, by = 10)
+iso &lt;- osrmIsochrone(loc = fire_stations_points_WGS_iso_sample, returnclass=&quot;sf&quot;,
+                     breaks = bks, res = 20)</code></pre>
+<p>Параметр <code>res</code> позволяет регулировать “разрешение”, т.е. точность построения изохроны, но, к сожалению, в <code>osrm</code> при увеличении значения <code>res</code> область ограниченная изохроной может перестать быть односвязной и могут потребоваться другие инструменты для построения изохрон. Пример 10-минутной изохроны показан на рисунке ниже.</p>
+<pre class="r"><code>base_map + geom_sf(data = iso, color = &quot;red&quot;, size = 1, alpha = 0.1) +
+  annotation_scale(location = &quot;tl&quot;, width_hint = 0.5, style = &quot;ticks&quot;) +
+  geom_sf(data = fire_stations_points %&gt;% dplyr::filter(name == &quot;ПСЧ-17&quot;),
+          color = &quot;blue&quot;, alpha = 1, shape = 8, size = 2.5, stroke = 1
+  ) +
+  ggrepel::geom_label_repel(data = fire_stations %&gt;% dplyr::filter(name == &quot;ПСЧ-17&quot;), 
+                            aes(geo_lon, geo_lat, label = name), 
+                            fontface = &#39;bold&#39;,
+                            size = 3, alpha = 0.9) +
+  # географические границы ихохроны
+  coord_sf(xlim = c(92.86407, 93.04553), 
+           ylim = c(56.02534, 56.11881),
+           expand = FALSE) </code></pre>
+<div class="figure"><span style="display:block;" id="fig:isomap"></span>
+<img src="{{< blogdown/postref >}}index.ru_files/figure-html/isomap-1.png" alt="*Пример построения изохроны*" width="768" />
+<p class="caption">
+Рисунок 8: <em>Пример построения изохроны</em>
+</p>
+</div>
+</div>
+<div id="заключение" class="section level2">
+<h2>Заключение</h2>
+<p>В статье были кратко рассмотрены следующие вопросы в применении к географически распределенным данным городской инфраструктуры:</p>
+<ul>
+<li>построение <strong>OpenStreetMap</strong> карт городской структуры дорог, нанесение точечных объектов и ограниченных областей на карты</li>
+<li>достижимость социально значимых объектов из пожарно-спасательных подразделений по временному показателю</li>
+<li>построение оптимальных маршрутов движения автомобиля</li>
+<li>построение изохрон</li>
+</ul>
+<p>Все результаты представленные здесь являются воспроизводимыми, заменив соответствующие значения, легко рассмотреть подобные карты для других городов Российской Федерации. Например, кроме школ, автором были проанализированы времена достижимости до детских садов и торгово-развлекательных центров некоторых городов.</p>
+<p>Существует множество инструментов для решения такого рода задач как на языке <strong>R</strong>, так и на языке <strong>Python</strong>, и библиотека <code>osrm</code> является не единственной библиотекой в этом классе. Например, замечательная библиотека <code>sfnetworks</code> в <strong>R</strong> (см. <a href="https://luukvdmeer.github.io/sfnetworks/index.html">Tidy Geospatial Networks in R</a>) позволяет работать с дорожной сетью с точки зрения теории графов. Таким образом, в <code>sfnetworks</code> можно оптимизировать маршруты используя известные алгоритмы дискретной математики, анализировать ближайшие объекты, строить изохроны, маршруты и многое другое, см. <a href="https://luukvdmeer.github.io/sfnetworks/articles/sfn04_routing.html">страницу библиотеки</a>.</p>
+</div>
