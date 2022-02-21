@@ -1,0 +1,840 @@
+---
+title: Анализ графа дорожной сети
+author: admin
+date: '2022-02-21'
+slug: 'graph-streets'
+categories: ["R"]
+tags: ["rstats", "геоданные"]
+subtitle: 'пример анализа графа дорожной сети города с использованием библиотеки sfnetworks'
+summary: 'В статье показаны примеры работы с библиотекой `sfnetworks` для анализа графов на основе географических данных на примере города Барнаула.'
+authors: 
+- admin
+lastmod: '2022-02-21T09:41:01+07:00'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+```{r applause-button, echo=FALSE}
+applause::button(
+  color = "#0C4047",
+  width = "58px",
+  multiclap = T
+)
+```
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(magrittr)
+library(sf)
+library(osmdata)
+
+# annotation scale
+library(ggspatial)
+
+library(sfnetworks)
+library(tidygraph)
+
+my_place <- "Barnaul Russia"
+
+highway_sizes <- tibble::tribble(
+  ~highway, ~highway_group, ~size,
+  "motorway",        "large",   0.5,
+  "motorway_link",   "large",   0.3,
+  "primary",         "large",   0.5,
+  "primary_link",    "large",   0.3,
+  "secondary",       "medium",  0.3,
+  "secondary_link",  "medium",  0.3,
+  "tertiary",        "medium",  0.3,
+  "tertiary_link",   "medium",  0.3,
+  "residential",     "small",   0.2,
+  "living_street",   "small",   0.2,
+  "unclassified",    "small",   0.2,
+  "service",         "small",   0.2,
+  "footway",         "small",   0.2
+)
+
+# streets
+streets_osm <- opq(my_place) %>%
+  add_osm_feature(key = "highway", 
+                  value = highway_sizes$highway) %>%
+  osmdata_sf() %>% 
+  unname_osmdata_sf()
+
+# пауза для API
+Sys.sleep(10)
+
+streets <- streets_osm$osm_lines %>% 
+  dplyr::select(osm_id, name, name.en, highway, maxspeed, oneway, surface) %>% 
+  mutate(length = as.numeric(st_length(.))) %>% 
+  left_join(highway_sizes, by="highway") %>% 
+  dplyr::filter(highway_group != "small" | length >= quantile(length, probs = 0.25))
+
+# railways
+railways <- getbb(my_place) %>%
+  opq()%>%
+  add_osm_feature(key = "railway", 
+                  value = "rail") %>%
+  osmdata_sf()
+
+# пауза для API
+Sys.sleep(10)
+
+railways_osm <- opq(my_place) %>%
+  add_osm_feature(key = "railway", value="rail") %>%
+  osmdata_sf() %>% 
+  unname_osmdata_sf()
+
+railways <- railways_osm$osm_lines %>% 
+  dplyr::select()
+
+# пауза для API
+Sys.sleep(10)
+
+# water
+water_osm <- opq(my_place) %>%
+  add_osm_feature(key = "natural", value = "water") %>%
+  osmdata_sf() %>% 
+  unname_osmdata_sf()
+
+# пауза для API
+Sys.sleep(10)
+
+river_osm <- opq(my_place) %>%
+  add_osm_feature(key = "waterway", value = c("river", "riverbank")) %>%
+  osmdata_sf() %>% 
+  unname_osmdata_sf()
+
+water <- 
+  c(water_osm, river_osm) %>% 
+  .$osm_multipolygons %>% 
+  dplyr::select(osm_id, name) 
+
+blankbg <- theme(axis.line=element_blank(),
+                 axis.text.x=element_blank(),
+                 axis.text.y=element_blank(),
+                 axis.ticks=element_blank(),
+                 axis.title.x=element_blank(), 
+                 axis.title.y=element_blank(),
+                 legend.position = "top",
+                 plot.background=element_blank(),
+                 panel.grid.minor=element_blank(),
+                 panel.background=element_blank(),
+                 panel.grid.major=element_blank(),
+                 plot.margin = unit(c(t=1,r=1,b=1,l=1), "cm"),
+                 plot.caption = element_text(color = "grey20", size = 40, 
+                                             hjust = .5, face = "plain", 
+                                             family = "Playfair Display SC"),
+                 panel.border = element_blank()
+)
+
+base_map <-
+  ggplot() +
+  blankbg +
+  geom_sf(data = water,
+          fill = "steelblue",
+          lwd = 0,
+          alpha = 0.3) +
+  geom_sf(data = railways,
+          color = "grey30",
+          size = 0.2,
+          linetype="dotdash",
+          alpha = 0.5) +
+  geom_sf(data = streets %>% 
+            dplyr::filter(highway_group == "small"),
+          size = 0.1,
+          color = "grey40") +
+  geom_sf(data = streets %>% 
+            dplyr::filter(highway_group == "medium"),
+          size = 0.3,
+          color = "grey35") +
+  geom_sf(data = streets %>% 
+            dplyr::filter(highway_group == "large"),
+          size = 0.5,
+          color = "grey30") 
+```
+
+## Базовая карта на основе сервиса OpenStreetMap
+
+Для анализа топологии дорожной сети города существует множество различных инструментов. Например, библиотека [Network analysis library](https://docs.qgis.org/3.16/en/docs/pyqgis_developer_cookbook/network_analysis.html) геоинформационной системы [QGIS](https://www.qgis.org/ru/site/) позволяет на основе географических данных (линейных векторных слоев) создавать графы как структуры данных и работать с ними как с математическими объектами, а также использовать дополнения, написанные на языке **Python**. 
+
+В языке программирования **R** существует библиотека [sfnetworks](https://luukvdmeer.github.io/sfnetworks/index.html), цель которой -- работа с геопространственными сетями, т.е. графами, встроенными в географическое пространство. Это означает, что как узлы, так и ребра графа могут быть представлены в виде географических объектов. Такие структуры играют важную роль во многих различных областях, начиная от транспортного планирования и логистики, заканчивая экологией и эпидемиологией. 
+
+Библиотека `sfnetworks` сочетает возможности двух популярных библиотек: `sf`, учитывающей пространственные характеристики данных и `tidygraph` для анализа графов.
+Структура и характеристики геопространственных сетей выходят за рамки стандартной топологии графов, и поэтому при их анализе крайне важно явно учитывать пространственные особенности, например, географические проекции. В библиотеку `sfnetworks` внедрены процедуры расчета кратчайшего пути, очистки сети и модификации топологии, что в совокупности с возможностями интегрирования в рабочие процессы `tidyverse`, делает ее великолепным инструментом. Отметим сходство данного инструмента с известной библиотекой [OSMnx](https://geoffboeing.com/2016/11/osmnx-python-street-networks/) языка программирования **Python**.
+
+Библиотеку `sfnetworks` можно установить одним из способов: из репозитория [CRAN](https://cran.r-project.org/web/packages/sfnetworks/index.html)
+```r
+install.packages("sfnetworks")
+```
+либо с [GitHub](https://github.com/luukvdmeer/sfnetworks)
+```r
+remotes::install_github("luukvdmeer/sfnetworks")
+```
+
+Загрузим библиотеки:
+```r
+library(tidyverse)
+library(magrittr)
+
+# для работы с геоданными
+library(sf)
+
+# работа с графами
+library(sfnetworks)
+library(tidygraph)
+
+# annotation scale
+library(ggspatial)
+```
+
+В качестве примера мы используем граф дорожной сети города Барнаула. С помощью библиотеки `osmdata` загрузим из **OpenStreetMap** данные дорожной сети и визуализируем их также, как описано в [предыдущей записи блога](https://materov-blog.netlify.app/post/reachability/). 
+
+```{r basesmap, warning=FALSE, message=FALSE, fig.cap = "*Базовая карта города Барнаула*", fig.height = 6, fig.width = 9}
+base_map + 
+  # географические границы города
+  coord_sf(xlim = c(83.5, 83.91), 
+           ylim = c(53.25, 53.40),
+           expand = FALSE) 
+```
+
+Напомним, что базовая карта состоит из трех основных структур: `streets`, `railways` и `water`. В частности, `streets` имеет структуру:
+
+```{r}
+streets
+```
+
+Здесь указаны: `LINESTRING` -- последовательность точек, соединенных прямыми, непересекающимися отрезками линий; одномерная геометрия XY; значения ключа `highway` (основной тег, указывающий тип дорог); `maxspeed` -- максимальная разрешенная скорость; `oneway` -- является ли дорога с односторонним движением; `surface` -- дорожное покрытие. Используем данную информацию для визуализации карт.
+
+### Максимальная разрешенная скорость
+
+```{r warning=FALSE}
+# добавим максимально разрешенную скорость
+streets <-
+  streets %>% 
+  mutate(max_speed = as.numeric(maxspeed)) %>% 
+  dplyr::mutate(max_speed = replace_na(max_speed, 0))
+```
+
+
+```{r maxspeed, warning=FALSE, message=FALSE, fig.cap = "*Максимальная разрешенная скорость на дорогах г. Барнаула по версии OpenStreetMap*", fig.height = 6, fig.width = 10}
+# максимальная разрешенная скорость из OSM на карте
+base_map + 
+  geom_sf(data = streets %>% 
+            dplyr::filter(max_speed > 0), 
+          aes(color = as.factor(max_speed))) +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.88), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE) +
+  ggsci::scale_color_lancet() + 
+  labs(color = "максимальная разрешенная скорость (км/ч):")
+```
+
+### Дорожное покрытие
+
+```{r pavement, warning=FALSE, message=FALSE, fig.cap = "*Дорожное покрытие дорог г. Барнаула по версии OpenStreetMap*", fig.height = 7, fig.width = 9}
+# дорожное покрытие по версии OpenStreetMap
+base_map + 
+  geom_sf(data = streets, 
+          aes(color = as.factor(surface))) +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.88), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE) +
+  labs(color = "дорожное покрытие:") +
+  scale_color_viridis_d(option = "viridis", direction = 1)
+```
+
+### Одностороннее движение
+
+```{r oneway, warning=FALSE, message=FALSE, fig.cap = "*Улицы с односторонним движением г. Барнаула по версии OpenStreetMap*", fig.height = 5, fig.width = 9}
+# улицы с односторонним движением
+base_map + 
+  geom_sf(data = streets %>% 
+            dplyr::filter(oneway == "yes"), 
+          color = "blue") +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.88), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE)
+```
+
+Как мы видим, **OpenStreetMap** предоставляет не так много информации, тем не менее, эту информацию можно использовать для анализа дорожной сети.
+
+## Граф дорожной сети
+
+Чтобы сделать граф из дорожной сети нужна буквально одна команда из библиотеки `sfnetworks`!
+
+```{r}
+net <- as_sfnetwork(streets) %>% 
+  # географическая проекция
+  st_transform(4326) 
+```
+
+```{r graphcrop, warning=FALSE, message=FALSE, fig.cap = "*Граф дорожной сети г. Барнаула*", fig.height = 6, fig.width = 9}
+# граф дорожной сети Барнаула (кроп)
+ggplot() + 
+  geom_sf(data = st_as_sf(net, "edges"), 
+          col = "black", alpha = 0.4) +
+  geom_sf(data = st_as_sf(net, "nodes"), 
+          col = "black", alpha = 0.4, 
+          size = 0.6) + 
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.82), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE) 
+```
+
+Рассмотрим таблицу содержащую координаты вершин графа.
+
+```{r}
+# вершины графа (чтобы потом можно было сделать плотности)
+our_nodes <- st_as_sf(net, "nodes")$geometry %>% 
+  st_coordinates() %>% 
+  as_tibble() %>% 
+  rename(lon = X,
+         lat = Y)
+```
+
+Следующая карта показывает, где сосредоточено максимальное число узлов (соотвественно, городских перекрестков).
+
+```{r graphdensity, warning=FALSE, message=FALSE, fig.cap = "*Плотность узлов графа дорожной сети г. Барнаула*", fig.height = 6, fig.width = 9}
+# базовая карта + граф дорожной сети Барнаула (кроп с плотностями)
+ggplot() + 
+  stat_density_2d(data = our_nodes, 
+                  aes(fill = stat(nlevel), x = lon, y = lat), 
+                  geom = "polygon",
+                  n = 300, bins = 15, contour = TRUE, alpha = 0.2) +
+  geom_sf(data = st_as_sf(net, "edges"), col = "black", alpha = 0.4) +
+  geom_sf(data = st_as_sf(net, "nodes"), col = "black", alpha = 0.3, size = 0.2) + 
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.82), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE) +
+  viridis::scale_fill_viridis(discrete = F, 
+                              option = "viridis", 
+                              direction = 1) +
+  labs(x = "", y = "", 
+       fill = "нормированное количество узлов графа:") +
+  theme(legend.position = "none")
+```
+
+### Сглаживание графа дорожной сети
+
+Некоторые узлы графа могут содержаться внутри ребра и не использоваться для вычисления кратчайшего пути. Такого рода узлы мы назовем *псевдоузлами*. Для уменьшения сложности графа их удаляют, проводя процедуру *сглаживания*.
+
+```{r}
+smoothed_net <- convert(net, to_spatial_smooth)
+```
+
+```{r graphsmoothed, warning=FALSE, message=FALSE, fig.cap = "*Упрощенный (сглаженный) граф дорожной сети г. Барнаула*", fig.height = 5, fig.width = 7}
+# граф дорожной сети Барнаула (сглаживание)
+ggplot() + 
+  geom_sf(data = st_as_sf(smoothed_net, "edges"), 
+          col = "black", alpha = 0.4) +
+  geom_sf(data = st_as_sf(smoothed_net, "nodes"), 
+          col = "black", alpha = 0.4, 
+          size = 0.6) + 
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.65, 83.74), 
+           ylim = c(53.35, 53.39),
+           expand = FALSE) 
+```
+
+## Анализ графа дорожной сети
+
+Основу библиотеки `sfnetworks` с точки зрения графов составляет библиотека `tidygraph` содержащая [богатые возможности для анализа](https://tidygraph.data-imaginist.com/reference/index.html). 
+
+### Центральность узлов графа
+
+Рассмотрим понятие *центральности узла графа*. Показатель центральности или близости к центру в теории графов и анализе сетей определяет наиболее важные вершины графа.
+Существует [множество различных определений центральности](https://ru.wikipedia.org/wiki/Центральность). Например, функция `centrality_betweenness()` вводит понятие центральности, которое определяется количеством геодезических (кратчайших путей), проходящих через вершину (ребро), иными словами, это [cтепень посредничества ](https://ru.wikipedia.org/wiki/Степень_посредничества) вершины (ребра) графа. Таким образом, мы можем выделить наиболее важные перекрестки через которые проходит наибольший транспортный поток.
+
+```{r}
+net <- net %>%
+  activate("nodes") %>%
+  mutate(bc = centrality_betweenness())
+```
+
+```{r graphcentrality, warning=FALSE, message=FALSE, fig.cap = "*Центральность узлов графа дорожной сети г. Барнаула*", fig.height = 7, fig.width = 9}
+# кроп с центральными узлами
+base_map + 
+  geom_sf(data = st_as_sf(net, "edges"), col = "black", alpha = 0.2) +
+  geom_sf(data = st_as_sf(net, "nodes"), 
+          aes(col = bc/1000, size = bc/1000, alpha = bc/1000)) + 
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.82), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE) +
+  viridis::scale_color_viridis(option = "inferno", direction = 1) +
+  labs(size  = "степень посредничества вершины графа (тыс. ед.):",
+       alpha = "",
+       color = "") +
+  theme(legend.position = "bottom") +
+  guides(size = guide_legend(order = 1, ncol = 1),
+         alpha = guide_legend(override.aes = 
+                                list(size = 4),
+                              order = 2, ncol = 1),
+         color = guide_legend(override.aes = 
+                                list(alpha = 1, size = 4),
+                              order = 3, ncol = 1))
+```
+
+```{r}
+net <- net %>%
+  activate("edges") %>%
+  mutate(bc_e = centrality_edge_betweenness())
+```
+
+```{r graphcentralityedges, warning=FALSE, message=FALSE, fig.cap = "*Центральность ребер графа дорожной сети г. Барнаула*", fig.height = 7, fig.width = 9}
+# кроп с центральными узлами
+base_map + 
+  geom_sf(data = st_as_sf(net, "edges"), 
+          aes(col = bc_e/1000, size = bc_e/1000, alpha = bc_e/1000)) + 
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.82), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE) +
+  viridis::scale_color_viridis(option = "inferno", direction = 1) +
+  labs(size  = "степень посредничества ребра графа (тыс. ед.):",
+       alpha = "",
+       color = "") +
+  theme(legend.position = "bottom") +
+  guides(size = guide_legend(order = 1, ncol = 1),
+         alpha = guide_legend(override.aes = 
+                                list(size = 4),
+                              order = 2, ncol = 1),
+         color = guide_legend(override.aes = 
+                                list(alpha = 1, size = 4),
+                              order = 3, ncol = 1))
+```
+
+### Связность графа
+
+Ключевую роль в определении связности графа играют `cut edges` (`cut nodes`) -- ребра (вершины) графа, при удалении которых нарушается связность графа. С точки зрения дорожной сети, это те ключевые улицы (перекрестки), при блокировании которых автомобиль не может попасть в другую часть города.
+
+```{r}
+# cut nodes & edges
+new_net <- net %>%
+  activate("nodes") %>%
+  mutate(is_cut = node_is_cut()) %>%
+  morph(to_linegraph) %>%
+  mutate(is_cut = node_is_cut()) %>%
+  unmorph()
+
+cut_nodes <- new_net %>%
+  activate("nodes") %>%
+  filter(is_cut) %>%
+  st_geometry()
+
+cut_edges <- new_net %>%
+  activate("edges") %>%
+  filter(is_cut) %>%
+  st_geometry()
+```
+
+```{r graphcutedges, warning=FALSE, message=FALSE, fig.cap = "*Cut edges графа дорожной сети г. Барнаула*", fig.height = 7, fig.width = 12}
+# cut edges
+base_map + 
+  geom_sf(data = st_as_sf(net, "edges"), col = "black", alpha = 0.2) +
+  geom_sf(data = st_as_sf(net, "nodes"), col = "black", alpha = 0.2) + 
+  geom_sf(data = st_as_sf(cut_edges, "nodes"), col = "red", alpha = 0.9) + 
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.88), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE)
+```
+
+```{r graphcutnodes, warning=FALSE, message=FALSE, fig.cap = "*Cut nodes графа дорожной сети г. Барнаула*", fig.height = 7, fig.width = 12}
+# cut nodes
+base_map + 
+  geom_sf(data = st_as_sf(net, "edges"), col = "black", alpha = 0.2) +
+  geom_sf(data = st_as_sf(net, "nodes"), col = "black", alpha = 0.2) + 
+  geom_sf(data = st_as_sf(cut_nodes, "nodes"), col = "red", alpha = 0.5) +
+  # географические границы города
+  coord_sf(xlim = c(83.57, 83.88), 
+           ylim = c(53.31, 53.40),
+           expand = FALSE)
+```
+
+### Нахождение кластеров
+
+Существует множество различных алгоритмов для кластеризации узлов графа. Ниже используется [метод Лувена](https://en.wikipedia.org/wiki/Louvain_method) для обнаружения кластеров (сообществ).
+
+```{r}
+con_net <- as_sfnetwork(streets, directed = F) %>% 
+  # географическая проекция
+  st_transform(4326) %>%
+  activate("nodes") %>%
+  filter(group_components() == 1)
+
+custered_net <-
+con_net %>%
+  activate("nodes") %>% 
+  mutate(louvain = as.factor(group_louvain()))
+```
+
+```{r clusteringlouvain, warning=FALSE, message=FALSE, fig.cap = "*Пример кластеризации узлов графа*", fig.height = 5.5, fig.width = 9}
+base_map +
+  geom_sf(data = st_as_sf(con_net, "edges"), 
+          col = "black", alpha = 0.4) +
+  geom_sf(data = st_as_sf(custered_net, "nodes"), 
+          aes(col = louvain), alpha = 0.8, size = 1.2) +
+  # географические границы города
+  coord_sf(xlim = c(83.53, 83.85), 
+           ylim = c(53.29, 53.40),
+           expand = FALSE) +
+  theme(legend.position = "none") +
+  viridis::scale_color_viridis(option = "inferno", discrete = T)
+```
+
+### Азимут (направление) улиц городской структуры
+
+Для того, чтобы проанализировать показатели застройки уличной сети дорог, можно использовать преобразования в полярной системе координат, например, вычислив азимут направления той или иной дороги.
+
+```{r}
+net <-
+net %>%
+  activate("edges") %>%
+  morph(to_spatial_transformed, 4326) %>%
+  mutate(azimuth = edge_azimuth()) %>%
+  unmorph()
+```
+
+```{r azimuth, warning=FALSE, message=FALSE, fig.cap = "*Азимуты направлений уличной сети дорог г. Барнаула*", fig.height = 5, fig.width = 9}
+base_map + 
+  geom_sf(data = st_as_sf(net, "edges"), 
+          aes(col = as.numeric(azimuth)), alpha = 0.9) +
+  # географические границы города
+  coord_sf(xlim = c(83.71, 83.81), 
+           ylim = c(53.31, 53.34),
+           expand = FALSE) +
+  scale_colour_gradientn(colours = terrain.colors(6)) +
+  labs(color = "азимут") +
+  hrbrthemes::theme_ipsum()
+```
+
+Кроме того, можно рассмотреть ориентацию дорожной сети как это сделано на [странице](https://geoffboeing.com/2019/09/urban-street-network-orientation/), автором которой является [Geoff Boeing](https://geoffboeing.com/).
+
+```{r azimuthBoeing, warning=FALSE, message=FALSE, fig.cap = "*Ориентация направлений уличной сети дорог г. Барнаула*", fig.height = 5, fig.width = 6}
+library(units)
+net %>%
+  pull(azimuth) %>% 
+  as_tibble() %>% 
+  mutate(value = round(value, 1)) %>% 
+  group_by(value) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(x = as.numeric(value), y = count)) + 
+  geom_bar(fill = "midnightblue", 
+           stat = "identity") +
+  hrbrthemes::theme_ipsum() + 
+  labs(x = "", y = "") +
+  coord_polar()
+```
+
+## Построение областей достижимости
+
+Одна из основных трудностей при рассмотрении достижимости узлов графа дорожной сети города, -- большое количество связных компонент графа. Например, для рассматреваемой здесь дорожной сети Барнаула.
+
+```{r}
+net %>% with_graph(., graph_component_count())
+```
+
+Рассмотрим одну (первую) связную компоненту графа и будем далее работать с ней. 
+
+```{r}
+connected_net <- net %>%
+  activate("nodes") %>%
+  filter(group_components() == 1)
+
+connected_net %>% with_graph(., graph_component_count())
+```
+
+Рассмотрим граф как объект в соответствующей географической проекции, это позволит рассмотреть *вес ребра* как его длину (которая будет пересчитана в метрах).
+
+```{r}
+connected_net <- connected_net %>%
+  st_transform(4326) %>%
+  activate("edges") %>%
+  mutate(weight = edge_length())
+
+connected_net
+```
+
+Выделим различные типы ребер.
+
+```{r}
+types <- connected_net %>%
+  activate("edges") %>%
+  pull(highway) %>%
+  unique()
+
+types
+```
+
+Зададим скорости движения по различным типам дорог, здесь коэффициент пересчета позволяет перевести скорости в м/с. Также, найдем соответствующее время движения по данным дорогам в секундах.
+
+```{r warning=FALSE}
+connected_net <- 
+  connected_net %>%
+  activate("edges") %>%
+  group_by(highway) %>%
+  mutate(
+    speed = case_when(
+      highway == "secondary" ~      60 / 3.6,
+      highway == "residential" ~    40 / 3.6,
+      highway == "primary_link" ~   60 / 3.6,
+      highway == "tertiary" ~       60 / 3.6,
+      highway == "living_street" ~  40 / 3.6,
+      highway == "primary" ~        60 / 3.6,
+      highway == "unclassified" ~   40 / 3.6,
+      highway == "service" ~        40 / 3.6,
+      highway == "tertiary_link" ~  60 / 3.6,
+      highway == "footway" ~        40 / 3.6,
+      highway == "secondary_link" ~ 60 / 3.6
+    )
+  ) %>%
+  mutate(speed = units::set_units(speed, "m/s")) %>%
+  mutate(time = weight / speed) %>%
+  ungroup()
+
+connected_net <- activate(connected_net, "nodes")
+```
+
+Найдем центроид рассматриваемого графа.
+
+```{r}
+p <- connected_net %>%
+  activate("nodes") %>%
+  st_geometry() %>%
+  st_combine() %>%
+  st_centroid() %>% 
+  st_transform(4326) 
+```
+
+Теперь вычислим область графа, ограничивающую 10-минутную (600 секунд) изохрону.
+
+```{r}
+iso <- connected_net %>%
+  filter(node_distance_from(st_nearest_feature(p, connected_net), 
+                            weights = time) <= 60 * 10)
+```
+
+Найдем выпуклую оболочку полученной области.
+
+```{r}
+iso_poly <- iso %>%
+  st_geometry() %>%
+  st_combine() %>%
+  st_convex_hull()
+
+iso_poly
+```
+
+Изобразим область 10-минутной изохроны полученной из центроида графа.
+
+```{r isochrone, warning=FALSE, message=FALSE, fig.cap = "*Пример построения 10-минутной изохроны*", fig.height = 6, fig.width = 8}
+base_map + 
+  geom_sf(data = st_as_sf(iso_poly, "edges"), 
+          col = "orange", alpha = 0.6) +
+  geom_sf(data = st_as_sf(iso, "edges"), 
+          col = "red", 
+          alpha = 0.7) +
+  geom_sf(data = p, 
+          color = "blue", 
+          alpha = 1, 
+          shape = 8, 
+          size = 2.5, 
+          stroke = 1) +
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.65, 83.81), 
+           ylim = c(53.315, 53.41),
+           expand = FALSE) +
+  viridis::scale_colour_viridis(direction = 1, 
+                                option = "cividis") +
+  annotation_scale(location = "tl", width_hint = 0.5, style = "ticks")
+```
+
+Покажем еще один способ для отображения изохрон. Для этого сформируем набор цветовой палитры на основе пороговых значений.
+
+```{r}
+thresholds <- rev(seq(100, 10000, 100))
+palette <- sf.colors(n = 100)
+```
+
+Найдем множество, объединяющее все ребра и вершины графа достижимые в связной компоненте из центроида графа.
+
+```{r}
+datalist_nodes = list()
+for (i in c(1:100)) {
+  iso_data <- 
+    convert(connected_net, to_spatial_neighborhood, p, thresholds[i]) %>% 
+    activate("nodes") %>% 
+    mutate(space_color = palette[i]) %>% 
+    as_tibble()
+  iso_data$i <- i
+  datalist_nodes[[i]] <- iso_data
+}
+big_data_nodes <- dplyr::bind_rows(datalist_nodes)
+```
+
+```{r}
+datalist_edges = list()
+for (i in c(1:100)) {
+  iso_data <- 
+    convert(connected_net, to_spatial_neighborhood, p, thresholds[i]) %>% 
+    activate("edges") %>% 
+    mutate(space_color = palette[i]) %>% 
+    as_tibble()
+  iso_data$i <- i
+  datalist_edges[[i]] <- iso_data
+}
+big_data_edges <- dplyr::bind_rows(datalist_edges)
+```
+
+Изобразим полученный результат.
+
+```{r isochrone2, warning=FALSE, message=FALSE, fig.cap = "*Пример построения изохроны из центроида графа*", fig.height = 7, fig.width = 7}
+base_map +
+  geom_sf(data = big_data_nodes, aes(color = space_color), 
+          alpha = 0.8) + 
+  geom_sf(data = big_data_edges, aes(color = space_color), 
+          alpha = 0.8) + 
+  geom_sf(data = p, 
+          color = "black", 
+          alpha = 1, 
+          shape = 8, 
+          size = 2.5, 
+          stroke = 1) +
+  hrbrthemes::theme_ipsum() +
+  # географические границы города
+  coord_sf(xlim = c(83.65, 83.81), 
+           ylim = c(53.32, 53.41),
+           expand = FALSE) +
+  viridis::scale_colour_viridis(direction = 1, 
+                                discrete = T,
+                                option = "plasma") +
+  theme(legend.position = "none") +
+  annotation_scale(location = "tl", 
+                   width_hint = 0.5, 
+                   style = "ticks")
+```
+
+*Морфемы* позволяют расширить возможности работы с графами, используя `dplyr` с помощью команды `tidygraph::morph()` и затем внести полученные изменения обратно в граф командой `tidygraph::unmorph()`. Это позволяет вам временно изменить топологию исходной сети.  
+
+### Нахождение кратчайшего пути
+
+В `sfnetworks` возможно находить кратчайший путь для двух и более вершин с помощью команды-морфемы `to_spatial_shortest_paths()`.
+
+```{r}
+subnet = connected_net %>%
+  activate("edges") %>%
+  morph(
+    to_spatial_shortest_paths,
+    from = 10, to = 60,
+    weights = edge_length()
+  ) %>%
+  mutate(in_paths = TRUE) %>%
+  unmorph()
+
+p1 <- connected_net %>%
+  activate("nodes") %>%
+  st_as_sf() %>%
+  slice(c(10))
+
+p2 <- connected_net %>%
+  activate("nodes") %>%
+  st_as_sf() %>%
+  slice(c(60))
+
+colors = sf.colors(2, categorical = TRUE)
+```
+
+```{r shortpathtwo, warning=FALSE, message=FALSE, fig.cap = "*Пример построения  кратчайшего пути между заданными вершинами в связной компоненте графа*", fig.height = 7, fig.width = 8}
+base_map +
+  geom_sf(data = st_as_sf(subnet %>% filter(in_paths), "edges"), 
+          col = "blue", alpha = 0.9, size = 1) + 
+  geom_sf(data = p1, 
+          color = colors[1], 
+          alpha = 1, 
+          shape = 8, 
+          size = 2.5, 
+          stroke = 1) +
+  geom_sf(data = p2, 
+          color = colors[2], 
+          alpha = 1, 
+          shape = 8, 
+          size = 2.5, 
+          stroke = 1) +
+  hrbrthemes::theme_ipsum() + 
+  # географические границы города
+  coord_sf(xlim = c(83.65, 83.85), 
+           ylim = c(53.29, 53.40),
+           expand = FALSE) 
+```
+
+Пример использования морфем показан ниже, где ищутся кратчайшие пути в связной компоненте графа из точки с исходным номером в заданный набор точек командой `to_spatial_shortest_paths()`.
+
+```{r warning=FALSE}
+new_net <- connected_net %>%
+  activate("edges") %>%
+  morph(
+    to_spatial_shortest_paths,
+    from = 50, to = seq(from = 100, to = 500, by = 10),
+    weights = edge_length()
+  ) %>%
+  mutate(in_paths = TRUE) %>%
+  unmorph()
+
+p_from <- connected_net %>%
+  activate("nodes") %>%
+  st_as_sf() %>%
+  slice(c(50))
+```
+
+Полученные пути объединим и изобразим красным цветом.
+
+```{r shortpaths, warning=FALSE, message=FALSE, fig.cap = "*Пример построения объединения кратчайших путей между заданными вершинами в связной компоненте графа*", fig.height = 6, fig.width = 10}
+base_map +
+  geom_sf(data = st_as_sf(new_net, "edges"), 
+          col = "blue", alpha = 0.4) +
+  geom_sf(data = st_as_sf(new_net %>% filter(in_paths), "edges"), 
+          col = "red", alpha = 0.9, size = 1) +
+  geom_sf(data = p_from, 
+          color = "black", 
+          alpha = 1, 
+          shape = 8, 
+          size = 2.5, 
+          stroke = 1) +
+  hrbrthemes::theme_ipsum() + 
+  # географические границы города
+  coord_sf(xlim = c(83.53, 83.85), 
+           ylim = c(53.29, 53.40),
+           expand = FALSE) 
+```
+
+## Заключение
+
+В статье были рассмотрены некоторые вопросы связанные с анализом структуры городской дорожной сети. Загрузив данные из **OpenStreetMap** и затем преобразовав их в граф дорожной сети, используя библиотеку `sfnetworks`, возможно работать с графом дорожной сети как математическим объектом. 
+
+Здесь были рассмотрены некоторые вопросы связанные с 
+
+- отображением информации предоставленной **OpenStreetMap** на карте дорожной сети;
+- анализом графа дорожной сети (нахождение центральных ребер и узлов, cut edges и cut nodes, кластеров для вершин графа, ориентации направления улиц, и т.д.);
+- анализом нахождения кратчайших путей и изохрон с учетом скоростей движения автомобиля.
+
+Одной из основных технических трудностей является обилие связных компонент графа дорожной сети, что затрудняет поиск оптимальных маршрутов в силу невозможности достичь ту или иную вершину из заданной.
+
+Гораздо более глубокий анализ данных структур предоставляют команды библиотек `sfnetworks` и `tidygraph`.
