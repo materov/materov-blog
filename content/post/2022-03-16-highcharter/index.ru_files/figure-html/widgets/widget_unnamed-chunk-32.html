@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<style>body{background-color:white;}</style>
+<script src="highchart_libs/htmlwidgets/htmlwidgets.js"></script>
+<script src="highchart_libs/jquery/jquery.min.js"></script>
+<script src="highchart_libs/proj4js/proj4.js"></script>
+<link href="highchart_libs/highcharts/css/motion.css" rel="stylesheet" />
+<script src="highchart_libs/highcharts/highcharts.js"></script>
+<script src="highchart_libs/highcharts/highcharts-3d.js"></script>
+<script src="highchart_libs/highcharts/highcharts-more.js"></script>
+<script src="highchart_libs/highcharts/modules/stock.js"></script>
+<script src="highchart_libs/highcharts/modules/map.js"></script>
+<script src="highchart_libs/highcharts/modules/data.js"></script>
+<script src="highchart_libs/highcharts/modules/exporting.js"></script>
+<script src="highchart_libs/highcharts/modules/offline-exporting.js"></script>
+<script src="highchart_libs/highcharts/modules/drilldown.js"></script>
+<script src="highchart_libs/highcharts/modules/item-series.js"></script>
+<script src="highchart_libs/highcharts/modules/overlapping-datalabels.js"></script>
+<script src="highchart_libs/highcharts/modules/annotations.js"></script>
+<script src="highchart_libs/highcharts/modules/export-data.js"></script>
+<script src="highchart_libs/highcharts/modules/funnel.js"></script>
+<script src="highchart_libs/highcharts/modules/heatmap.js"></script>
+<script src="highchart_libs/highcharts/modules/treemap.js"></script>
+<script src="highchart_libs/highcharts/modules/sankey.js"></script>
+<script src="highchart_libs/highcharts/modules/dependency-wheel.js"></script>
+<script src="highchart_libs/highcharts/modules/organization.js"></script>
+<script src="highchart_libs/highcharts/modules/solid-gauge.js"></script>
+<script src="highchart_libs/highcharts/modules/streamgraph.js"></script>
+<script src="highchart_libs/highcharts/modules/sunburst.js"></script>
+<script src="highchart_libs/highcharts/modules/vector.js"></script>
+<script src="highchart_libs/highcharts/modules/wordcloud.js"></script>
+<script src="highchart_libs/highcharts/modules/xrange.js"></script>
+<script src="highchart_libs/highcharts/modules/tilemap.js"></script>
+<script src="highchart_libs/highcharts/modules/venn.js"></script>
+<script src="highchart_libs/highcharts/modules/gantt.js"></script>
+<script src="highchart_libs/highcharts/modules/timeline.js"></script>
+<script src="highchart_libs/highcharts/modules/parallel-coordinates.js"></script>
+<script src="highchart_libs/highcharts/modules/bullet.js"></script>
+<script src="highchart_libs/highcharts/modules/coloraxis.js"></script>
+<script src="highchart_libs/highcharts/modules/dumbbell.js"></script>
+<script src="highchart_libs/highcharts/modules/lollipop.js"></script>
+<script src="highchart_libs/highcharts/modules/series-label.js"></script>
+<script src="highchart_libs/highcharts/plugins/motion.js"></script>
+<script src="highchart_libs/highcharts/custom/reset.js"></script>
+<script src="highchart_libs/highcharts/modules/boost.js"></script>
+<script src="highchart_libs/highchart-binding/highchart.js"></script>
+<script src="highchart_libs/pymjs/pym.v1.min.js"></script>
+  <title>highchart</title>
+</head>
+<body>
+<div id="htmlwidget_container">
+  <div id="htmlwidget-0f7f6808fc55e319a14e" style="width:100%;height:500px;" class="highchart html-widget"></div>
+  <script>HTMLWidgets.pymChild = new pym.Child();HTMLWidgets.addPostRenderHandler(function(){
+                                setTimeout(function(){HTMLWidgets.pymChild.sendHeight();},100);
+                            });</script>
+</div>
+<script type="application/json" data-for="htmlwidget-0f7f6808fc55e319a14e">{"x":{"hc_opts":{"chart":{"reflow":true,"type":"column","options3d":{"enabled":true,"beta":15,"alpha":15}},"title":{"text":"Средние температуры воздуха в г. Красноярске в 2018-2020 гг."},"yAxis":{"title":{"text":null}},"credits":{"enabled":true,"text":"Диаграмма создана при использовании R и highcharter","href":"https://jkunst.com/highcharter/"},"exporting":{"enabled":false},"boost":{"enabled":false},"plotOptions":{"series":{"label":{"enabled":false},"turboThreshold":0},"treemap":{"layoutAlgorithm":"squarified"}},"xAxis":{"categories":["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек","Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"]},"series":[{"data":[-21.2,-15,-6.3,3.3,7.4,19.1,16.7,17.2,10.1,5.3,-9.4,-19.7],"name":"2018","tooltip":{"valueSuffix":"°C"}},{"data":[-12.4,-15.8,-1.2,1.9,9,17.3,14.6,15.2,7.5,2.1,-12.4,-9.9],"name":"2019","tooltip":{"valueSuffix":"°C"}},{"data":[-11.1,-11.4,-5.9,5.6,10.9,13.3,16.3,14.6,8.7,0.4,-10.7,-18.5],"name":"2020","tooltip":{"valueSuffix":"°C"}}]},"theme":{"colors":["#E10033","#000000","#767676","#E4E4E4"],"chart":{"backgroundColor":"#FFFFFF","style":{"fontFamily":"Roboto","color":"#000000"}},"title":{"align":"left","style":{"fontFamily":"Roboto","color":"#000000","fontWeight":"bold"}},"subtitle":{"align":"left","style":{"fontFamily":"Roboto","color":"#000000","fontWeight":"bold"}},"xAxis":{"lineColor":"#000000","lineWidth":2,"tickColor":"#000000","tickWidth":2,"labels":{"style":{"color":"black"}},"title":{"style":{"color":"black"}}},"yAxis":{"opposite":true,"gridLineWidth":2,"gridLineColor":"#F3F3F3","lineColor":"#CEC6B9","minorGridLineColor":"#CEC6B9","labels":{"align":"left","style":{"color":"black"},"x":0,"y":-2},"tickLength":0,"tickColor":"#CEC6B9","tickWidth":1,"title":{"style":{"color":"black"}}},"tooltip":{"backgroundColor":"#FFFFFF","borderColor":"#76c0c1","style":{"color":"#000000"}},"legend":{"layout":"horizontal","align":"left","verticalAlign":"top","itemStyle":{"color":"#3C3C3C"},"itemHiddenStyle":{"color":"#606063"}},"credits":{"style":{"color":"#666"}},"labels":{"style":{"color":"#D7D7D8"}},"drilldown":{"activeAxisLabelStyle":{"color":"#F0F0F3"},"activeDataLabelStyle":{"color":"#F0F0F3"}},"navigation":{"buttonOptions":{"symbolStroke":"#DDDDDD","theme":{"fill":"#505053"}}},"legendBackgroundColor":"rgba(0, 0, 0, 0.5)","background2":"#505053","dataLabelsColor":"#B0B0B3","textColor":"#C0C0C0","contrastTextColor":"#F0F0F3","maskColor":"rgba(255,255,255,0.3)"},"conf_opts":{"global":{"Date":null,"VMLRadialGradientURL":"http =//code.highcharts.com/list(version)/gfx/vml-radial-gradient.png","canvasToolsURL":"http =//code.highcharts.com/list(version)/modules/canvas-tools.js","getTimezoneOffset":null,"timezoneOffset":0,"useUTC":true},"lang":{"contextButtonTitle":"Контекстное меню диаграммы","decimalPoint":",","downloadCSV":"Загрузить CSV","downloadJPEG":"Загрузить JPEG","downloadPDF":"Загрузить PDF","downloadPNG":"Загрузить PNG","downloadSVG":"Загрузить SVG","downloadXLS":"Загрузить XLS","drillUpText":"◁ Назад к {series.name}","exitFullscreen":"Выход из полноэкранного режима","exportData":{"annotationHeader":"Аннотации","categoryDatetimeHeader":"DateTime","categoryHeader":"Категория"},"hideData":"Скрыть таблицу данных","invalidDate":null,"loading":"Загрузка...","months":["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"],"noData":"Нет данных для отображения","numericSymbolMagnitude":1000,"numericSymbols":["k","M","G","T","P","E"],"printChart":"Печать диаграммы","resetZoom":"Сброс масштабирования","resetZoomTitle":"Сброс масштабирования к 1:1","shortMonths":["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"],"shortWeekdays":["Сб","Вс","Пн","Вт","Ср","Чт","Пт"],"thousandsSep":" ","viewData":"Просмотр таблицы данных","viewFullscreen":"Просмотр в полноэкранном режиме","weekdays":["Воскресенье","Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"]}},"type":"chart","fonts":"Roboto","debug":false},"evals":[],"jsHooks":[]}</script>
+<script type="application/htmlwidget-sizing" data-for="htmlwidget-0f7f6808fc55e319a14e">{"viewer":{"width":"100%","height":350,"padding":0,"fill":false},"browser":{"width":"100%","height":500,"padding":0,"fill":false}}</script>
+</body>
+</html>

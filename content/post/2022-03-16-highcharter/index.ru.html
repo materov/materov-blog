@@ -1,0 +1,419 @@
+---
+title: Введение в библиотеку Highcharter
+author: admin
+date: '2022-03-16'
+slug: highcharter
+categories: ["R"]
+tags: ["rstats"]
+subtitle: 'примеры работы в библиотеке `highcharter` для визуализации интерактивных диаграмм в R'
+summary: 'В статье показаны примеры работы в библиотеке `highcharter` для визуализации интерактивных диаграмм.'
+authors: 
+- admin
+lastmod: '2022-03-16T09:09:49+07:00'
+featured: yes
+math: true
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: yes
+projects: []
+---
+
+<link href="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.css" rel="stylesheet" />
+<script src="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.js"></script>
+<script src="{{< blogdown/postref >}}index.ru_files/htmlwidgets/htmlwidgets.js"></script>
+<script src="{{< blogdown/postref >}}index.ru_files/pymjs/pym.v1.js"></script>
+<script src="{{< blogdown/postref >}}index.ru_files/widgetframe-binding/widgetframe.js"></script>
+<link href="{{< blogdown/postref >}}index.ru_files/vembedr/css/vembedr.css" rel="stylesheet" />
+
+
+<p><applause-button style="width: 58px; height: 58px;" color="#0C4047" multiclap="true"></applause-button></p>
+<div id="библиотека-highcharter" class="section level2">
+<h2>Библиотека highcharter</h2>
+<p>Для внедрения HTML-виджетов в отчеты как веб-приложения, в <strong>R</strong> имеется большое количество различных инструментов, позволяющих создавать интерактивные диаграммы и карты, таких как</p>
+<ul>
+<li><p><a href="https://echarts4r.john-coene.com/index.html">echarts4r</a>,</p></li>
+<li><p><a href="http://rstudio.github.io/dygraphs/">dygraphs</a>,</p></li>
+<li><p><a href="https://rstudio.github.io/leaflet/">Leaflet</a>,</p></li>
+<li><p><a href="https://walker-data.com/mapboxapi/">mapboxapi</a>,</p></li>
+<li><p><a href="https://plotly.com/r/">Plotly</a>.</p></li>
+</ul>
+<p>Больше примеров различных HTML-виджетов можно посмотреть на странице <a href="http://www.htmlwidgets.org/">www.htmlwidgets.org</a>. Преимуществом этих средств визуализации является то, что они не требуют настройки серверной части как в <a href="https://shiny.rstudio.com/">Shiny</a>. К недостаткам можно отнести необходимость разбираться в “диалектах” каждого из инструментов.</p>
+<p>Библиотека <code>highcharter</code> является одним из эффективных средств для интерактивной визуализации данных. Это <em>обертка</em> для <strong>JavaScript</strong>-библиотеки <a href="https://www.highcharts.com/">Highcharts</a> на основе <a href="https://ru.wikipedia.org/wiki/SVG">SVG</a>, которая обладает гибкими настройками и мощным API. Отметим, что для коммерческого и правительственного использования <code>highcharts</code> не является бесплатным, при этом лицензия <code>highcharter</code> не предоставляет и не подразумевает лицензию для <code>highcharts</code>.</p>
+<p>Установить библиотеку возможно как с <a href="https://cran.r-project.org/web/packages/highcharter/index.html">CRAN</a>:</p>
+<pre class="r"><code>install.packages(&quot;highcharter&quot;)</code></pre>
+<p>так и с <a href="https://github.com/jbkunst/highcharter">GitHub</a>:</p>
+<pre class="r"><code>remotes::install_github(&quot;jbkunst/highcharter&quot;)</code></pre>
+</div>
+<div id="примеры-использования-highcharter" class="section level2">
+<h2>Примеры использования highcharter</h2>
+<p>Подключим библиотеку:</p>
+<pre class="r"><code>library(highcharter)</code></pre>
+<p>Подключим дополнительные библиотеки.</p>
+<pre class="r"><code>library(tidyverse)
+library(magrittr)</code></pre>
+<p><code>highcharter</code> позволяет создавать графики с использованием двух основных функций:</p>
+<ul>
+<li><p><code>highchart()</code>, которая создает диаграммы с использованием HTML-виджетов, при этом можно добавлять дополнительные геометрические слои к имеющимся построениям.</p></li>
+<li><p><code>hchart()</code> – универсальная функция для создания диаграмм, представляющих собой объект <code>highchart</code>.</p></li>
+</ul>
+<p>Например, для отрисовки диаграммы в <code>hchart()</code>, используется структура</p>
+<pre class="r"><code>hchart(&lt;data.frame&gt;, &lt;type_of_chart&gt;, hcaes(&lt;aesthetics&gt;), ...)</code></pre>
+<p>здесь:</p>
+<ul>
+<li><p><code>&lt;data.frame&gt;</code> – таблица данных для построения диаграммы,</p></li>
+<li><p><code>&lt;type_of_chart&gt;</code> представляет собой строку для указания типа диаграммы; это значение может быть: линия, сплайн, область, тепловая карта, и т.д,</p></li>
+<li><p><code>&lt;aesthetics&gt;</code> – используемое отображение для отрисовки данных,</p></li>
+<li><p><code>...</code> – другие параметры настройки диаграммы.</p></li>
+</ul>
+<div id="географические-карты-в-highcharter" class="section level3">
+<h3>Географические карты в highcharter</h3>
+<p>Покажем, как можно визуализировать простейшие геоданные в <code>highcharter</code>. В качестве примера визуализируем на карте Российской Федерации города с населением свыше 300 000 чел. Актуальные данные по городам РФ можно получить с сайта <a href="https://www.data-in.ru/data-catalog/datasets/160/">ИНИД</a> (на момент написания статьи на <em>12.03.2021</em>). После простейшей предобработки таблица с данными выглядит следующим образом.</p>
+<pre class="r"><code>cities_300 </code></pre>
+<pre><code>## # A tibble: 65 × 4
+##    name             population   lon   lat
+##    &lt;chr&gt;                 &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;
+##  1 Калининград          467289  20.4  54.7
+##  2 Пенза                522317  45    53.2
+##  3 Владимир             356168  40.4  56.1
+##  4 Иркутск              623479 104.   52.3
+##  5 Оренбург             561686  55.1  51.8
+##  6 Архангельск          348343  40.5  64.5
+##  7 Саранск              318578  45.2  54.2
+##  8 Набережные Челны     524444  52.4  55.7
+##  9 Ярославль            603961  39.9  57.6
+## 10 Чебоксары            492331  47.2  56.1
+## # … with 55 more rows</code></pre>
+<p>Добавим цвет для визуального отображения количества населения в каждой точке.</p>
+<pre class="r"><code>cities_300 &lt;- cities_300 %&gt;% 
+  mutate(colors = colorize(population))</code></pre>
+<p>Непосредственно подложка карты скачивается со <a href="https://code.highcharts.com/mapdata/">страницы Highcharts</a>, затем добавляется слой с городами, <code>tooltip</code> отвечает за всплывающие подсказки.</p>
+<pre class="r"><code>hcmap(&quot;countries/ru/custom/ru-all-disputed&quot;, showInLegend = FALSE) %&gt;% 
+  hc_add_series(
+    data = cities_300, 
+    type = &quot;mappoint&quot;,
+    hcaes(color = colors),
+    name = &quot;Город&quot;,
+    tooltip = list(pointFormat = &quot;{point.name}: {point.population:,.0f} чел.&quot;)
+  ) %&gt;% 
+  hc_title(text = &quot;Города с населением свыше 300 000 чел.&quot;) %&gt;% 
+  hc_subtitle(text = &quot;на 12.03.2021&quot;)</code></pre>
+<div id="htmlwidget-1" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-7.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<p>Другой пример построения карт показывает, как можно визуализировать глобальную карту. В качестве примера используем <a href="https://data.world/data-society/global-climate-change-data">Global Climate Change Data</a> (источник: <a href="http://berkeleyearth.org/data/">Berkeley Earth</a>).</p>
+<pre class="r"><code>AverageTemperature</code></pre>
+<pre><code>## # A tibble: 169 × 3
+##    country              aveT iso3 
+##    &lt;chr&gt;               &lt;dbl&gt; &lt;chr&gt;
+##  1 Afghanistan            15 AFG  
+##  2 Albania                14 ALB  
+##  3 Algeria                24 DZA  
+##  4 Andorra                12 ADO  
+##  5 Antigua and Barbuda    27 ATG  
+##  6 Argentina              15 ARG  
+##  7 Armenia                10 ARM  
+##  8 Australia              22 AUS  
+##  9 Austria                 7 AUT  
+## 10 Azerbaijan             13 AZE  
+## # … with 159 more rows</code></pre>
+<pre class="r"><code>hcmap(
+  &quot;custom/world-robinson-lowres&quot;, 
+  data = AverageTemperature,
+  name = &quot;температура&quot;, 
+  value = &quot;aveT&quot;,
+  # необходимо сделать join стандартных индексов карты &quot;iso-a3&quot;
+  # и индексов стран из данных -- переменной &quot;iso3&quot;
+  joinBy        = c(&quot;iso-a3&quot;, &quot;iso3&quot;), 
+  borderWidth   = 0,
+  nullColor     = &quot;#d3d3d3&quot;,
+  tooltip       = list(valueSuffix = &quot;°C&quot;)
+  ) %&gt;%
+  hc_colorAxis(
+    stops = color_stops(colors = viridisLite::inferno(10, begin = 0.1))
+  ) %&gt;% 
+  hc_title(text    = &quot;Средняя температура земной поверхности&quot;) %&gt;% 
+  hc_subtitle(text = &quot;за период 2000-2013 гг.&quot;)</code></pre>
+<div id="htmlwidget-2" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-2">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-10.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="русификация-highcharter" class="section level3">
+<h3>Русификация highcharter</h3>
+<p>Идея переопределения языковых опций в <code>highcharter</code> основана на <a href="https://stackoverflow.com/questions/25266392/how-to-set-highchart-global-options-in-r">Stack Overflow 1</a>, <a href="https://stackoverflow.com/questions/7419358/highcharts-datetime-localization">Stack Overflow 2</a> и <a href="https://api.highcharts.com/highstock/lang">Highcharts Configuration options</a>. Сначала необходимо получить текущие настройки локализации в переменную <code>lang</code>.</p>
+<pre class="r"><code>lang &lt;- getOption(&quot;highcharter.lang&quot;)</code></pre>
+<p>Например, для сокращений дней недели:</p>
+<pre class="r"><code>lang$shortWeekdays &lt;- c(&quot;Сб&quot;, &quot;Вс&quot;, &quot;Пн&quot;, &quot;Вт&quot;, &quot;Ср&quot;, &quot;Чт&quot;, &quot;Пт&quot;)</code></pre>
+<p>После переопределения настроек их необходимо сохранить.</p>
+<pre class="r"><code>options(highcharter.lang = lang)</code></pre>
+</div>
+<div id="отображение-биржевых-котировок" class="section level3">
+<h3>Отображение биржевых котировок</h3>
+<p>Библиотека <code>highcharter</code> может служить для отображения актуальных биржевых котировок на основе API библиотеки <code>quantmod</code>. Ниже приведен пример для отображения торгов <strong>Apple</strong>.</p>
+<pre class="r"><code>library(quantmod)
+
+AAPL &lt;- getSymbols(&quot;AAPL&quot;, 
+                  from = Sys.Date() - lubridate::years(1), 
+                  auto.assign = FALSE)
+
+AAPL &lt;- AAPL %&gt;% na.omit()
+
+AAPL.ave &lt;- SMA(Cl(AAPL), n = 5)</code></pre>
+<pre class="r"><code>highchart(type = &quot;stock&quot;) %&gt;% 
+  hc_add_series(AAPL, 
+                yAxis = 0, 
+                name  = &quot;AAPL&quot;) %&gt;% 
+  hc_add_series(AAPL.ave, 
+                yAxis = 0, 
+                name  = &quot;скользящее среднее AAPL&quot;,
+                color = hex_to_rgba(&quot;blue&quot;, 0.7)) %&gt;% 
+  hc_tooltip(valueDecimals = 2) %&gt;% 
+  hc_title(text = &quot;Котировки Apple&quot;) %&gt;% 
+    hc_exporting(
+    enabled = TRUE
+  )</code></pre>
+<div id="htmlwidget-3" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-3">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-16.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="вложенные-диаграммы" class="section level3">
+<h3>Вложенные диаграммы</h3>
+<p>Библиотека <code>highcharter</code> позволяет формировать диаграммы, в компактной форме представляющие сложную информацию при помощи <em>вложений</em>. В качестве примера мы рассмотрим ежедневное количество пожаров в Российской Федерации за апрель 2020 года по различным категориям.</p>
+<pre class="r"><code>fire_hc</code></pre>
+<pre><code>## # A tibble: 126 × 3
+##    dt         type_name            count
+##    &lt;chr&gt;      &lt;chr&gt;                &lt;int&gt;
+##  1 01.04.2020 Контролируемый пал     517
+##  2 01.04.2020 Лесной пожар            48
+##  3 01.04.2020 Неконтролируемый пал   150
+##  4 01.04.2020 Природный пожар         83
+##  5 02.04.2020 Контролируемый пал     397
+##  6 02.04.2020 Лесной пожар            75
+##  7 02.04.2020 Неконтролируемый пал   365
+##  8 02.04.2020 Природный пожар        124
+##  9 03.04.2020 Контролируемый пал     378
+## 10 03.04.2020 Лесной пожар            57
+## # … with 116 more rows</code></pre>
+<p>Создадим переменную <code>fire_column</code>, отвечающую за первый уровень вложенной столбцовой диаграммы.</p>
+<pre class="r"><code>fire_column &lt;- fire_hc %&gt;% 
+  group_by(type_name) %&gt;% 
+  summarise(count = sum(count)) %&gt;% 
+  ungroup()
+
+fire_column &lt;- fire_column %&gt;% arrange(desc(count))</code></pre>
+<p><em>Внутренней</em> части диаграммы будет отвечать переменная <code>fire_drilldown</code>.</p>
+<pre class="r"><code>fire_drilldown &lt;- fire_hc %&gt;% 
+  group_nest(type_name) %&gt;% 
+  mutate(
+    id   = type_name,
+    type = &quot;column&quot;,
+    data = map(data, mutate, name = dt, y = count),
+    data = map(data, list_parse))
+
+fire_drilldown</code></pre>
+<pre><code>## # A tibble: 5 × 4
+##   type_name            data        id                   type  
+##   &lt;chr&gt;                &lt;list&gt;      &lt;chr&gt;                &lt;chr&gt; 
+## 1 Контролируемый пал   &lt;list [30]&gt; Контролируемый пал   column
+## 2 Лесной пожар         &lt;list [30]&gt; Лесной пожар         column
+## 3 Неконтролируемый пал &lt;list [30]&gt; Неконтролируемый пал column
+## 4 Природный пожар      &lt;list [30]&gt; Природный пожар      column
+## 5 Торфяной пожар       &lt;list [6]&gt;  Торфяной пожар       column</code></pre>
+<p>Отрисовка диаграммы выглядит следующим образом. Кликнув по соответствующему столбцу, можно развернуть ежедневную статистику.</p>
+<pre class="r"><code>hchart(fire_column,
+       &quot;column&quot;,
+       hcaes(
+         x         = type_name,
+         y         = count,
+         name      = type_name, 
+         drilldown = type_name
+       ),
+       name = &quot;количество пожаров&quot;,
+       colorByPoint = TRUE
+) %&gt;% 
+  hc_drilldown(
+    allowPointDrilldown = TRUE,
+    series = list_parse(fire_drilldown)
+  ) %&gt;% 
+  hc_xAxis(title   = &quot;&quot;) %&gt;% 
+  hc_yAxis(title   = &quot;&quot;) %&gt;% 
+  hc_title(text    = &quot;Количество пожаров на территории Российской Федерации&quot;) %&gt;% 
+  hc_subtitle(text = &quot;в апреле 2020 года&quot;) %&gt;% 
+  hc_caption(text  = &quot;по данным МЧС России&quot;) %&gt;%
+  hc_add_theme(hc_theme_smpl())</code></pre>
+<div id="htmlwidget-4" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-4">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-21.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<p><code>highcharter</code> имеет богатые возможности для стилизации отображения диаграмм. Например, можно кастомизировать</p>
+<ul>
+<li><p>всплывающие подсказки (<a href="https://jkunst.com/highcharter/reference/hc_tooltip.html">Tooltip options</a>),</p></li>
+<li><p>темы (<a href="https://jkunst.com/highcharter/articles/themes.html">Themes</a>).</p></li>
+</ul>
+</div>
+<div id="пример-применения-различных-тем" class="section level3">
+<h3>Пример применения различных тем</h3>
+<p>Загрузим данные по погоде за последние несколько лет в г. Красноярске, которые были полученны с <a href="https://www.ncdc.noaa.gov/cdo-web/search">Climate Data Online Search NOAA</a>.</p>
+<p>Нас будут интересовать средние температуры воздуха в каждом месяце с 2013 года.</p>
+<pre class="r"><code>weather_month</code></pre>
+<pre><code>## # A tibble: 111 × 3
+##     YEAR MONTH   TAVE
+##    &lt;dbl&gt; &lt;ord&gt;  &lt;dbl&gt;
+##  1  2013 янв   -17.1 
+##  2  2013 фев   -15.3 
+##  3  2013 мар    -7.59
+##  4  2013 апр     3.24
+##  5  2013 май     7.44
+##  6  2013 июн    14.9 
+##  7  2013 июл    17.1 
+##  8  2013 авг    16.3 
+##  9  2013 сен     7.36
+## 10  2013 окт     2.71
+## # … with 101 more rows</code></pre>
+<p>Сформируем из этих данных временной ряд и спрогнозируем значения временного ряда на 2 года (24 месяца) вперед.</p>
+<pre class="r"><code>library(forecast)
+weather_month_ts &lt;- ts(weather_month[&quot;TAVE&quot;], 
+              start = c(2014, 1), frequency = 12)
+
+weather_forecast &lt;- forecast(ets(weather_month_ts), h = 24, level = 95)
+
+weather_forecast %&gt;% head(3)</code></pre>
+<pre><code>## $model
+## ETS(A,N,A) 
+## 
+## Call:
+##  ets(y = weather_month_ts) 
+## 
+##   Smoothing parameters:
+##     alpha = 0.0604 
+##     gamma = 1e-04 
+## 
+##   Initial states:
+##     l = 1.7846 
+##     s = -13.0473 -10.3034 -0.3558 7.0051 14.8059 16.1051
+##            14.7342 7.2403 2.0963 -5.9703 -15.0449 -17.2652
+## 
+##   sigma:  2.896
+## 
+##      AIC     AICc      BIC 
+## 766.0081 771.1145 806.5153 
+## 
+## $mean
+##              Jan         Feb         Mar         Apr         May         Jun
+## 2023                          -5.8803329   2.1864264   7.3302530  14.8240981
+## 2024 -17.1748906 -14.9548991  -5.8803329   2.1864264   7.3302530  14.8240981
+## 2025 -17.1748906 -14.9548991                                                
+##              Jul         Aug         Sep         Oct         Nov         Dec
+## 2023  16.1950579  14.8957324   7.0949640  -0.2656256 -10.2131336 -12.9573190
+## 2024  16.1950579  14.8957324   7.0949640  -0.2656256 -10.2131336 -12.9573190
+## 2025                                                                        
+## 
+## $level
+## [1] 95</code></pre>
+<pre class="r"><code>hc_weather &lt;- hchart(weather_forecast) %&gt;% 
+  hc_title(
+    text = &quot;Прогноз средних температур воздуха в г. Красноярске (в °C)&quot;
+  ) %&gt;% 
+  hc_tooltip(shared = TRUE, 
+             valueDecimals = 1)</code></pre>
+<p>Теперь отобразим полученный результат используя стилизованную тему.</p>
+<pre class="r"><code>hc_weather %&gt;%
+  hc_add_theme(hc_theme_smpl())</code></pre>
+<div id="htmlwidget-5" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-5">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-26.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<p>Отобразим тот же график используя другие темы.</p>
+<pre class="r"><code>hc_weather %&gt;%
+  hc_add_theme(hc_theme_google())</code></pre>
+<div id="htmlwidget-6" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-6">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-27.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<pre class="r"><code>hc_weather %&gt;%
+  hc_add_theme(hc_theme_538())</code></pre>
+<div id="htmlwidget-7" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-7">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-28.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="d-диаграммы" class="section level3">
+<h3>3D-диаграммы</h3>
+<p>Эффектно выглядят 3D-диаграммы. Покажем, как выглядит диаграмма средних температур воздуха в г. Красноярске за 3 года.</p>
+<pre class="r"><code># данные
+weather_hc &lt;-
+weather_df %&gt;% 
+  filter(YEAR %in% c(&quot;2018&quot;,&quot;2019&quot;, &quot;2020&quot;)) %&gt;% 
+  group_by(YEAR, MONTH) %&gt;% 
+  summarise(ave = round(mean(TAVE, na.rm = T), 1)) %&gt;% 
+  ungroup()
+
+weather_hc</code></pre>
+<pre><code>## # A tibble: 36 × 3
+##     YEAR MONTH   ave
+##    &lt;dbl&gt; &lt;ord&gt; &lt;dbl&gt;
+##  1  2018 Янв   -21.2
+##  2  2018 Фев   -15  
+##  3  2018 Мар    -6.3
+##  4  2018 Апр     3.3
+##  5  2018 Май     7.4
+##  6  2018 Июн    19.1
+##  7  2018 Июл    16.7
+##  8  2018 Авг    17.2
+##  9  2018 Сен    10.1
+## 10  2018 Окт     5.3
+## # … with 26 more rows</code></pre>
+<pre class="r"><code># базовая диаграмма
+hc &lt;- highchart() %&gt;% 
+  hc_xAxis(categories = weather_hc$MONTH) %&gt;% 
+  hc_add_series(
+    name = &quot;2018&quot;, 
+    tooltip = list(
+      valueSuffix = &quot;°C&quot;
+    ), 
+    data = (weather_hc %&gt;% filter(YEAR == &quot;2018&quot;))$ave
+  ) %&gt;% 
+  hc_xAxis(categories = weather_hc$MONTH) %&gt;% 
+  hc_add_series(
+    name = &quot;2019&quot;, 
+    tooltip = list(
+      valueSuffix = &quot;°C&quot;
+    ),
+    data = (weather_hc %&gt;% filter(YEAR == &quot;2019&quot;))$ave
+  ) %&gt;% 
+  hc_xAxis(categories = weather_hc$MONTH) %&gt;% 
+  hc_add_series(
+    name = &quot;2020&quot;, 
+    tooltip = list(
+      valueSuffix = &quot;°C&quot;
+    ),
+    data = (weather_hc %&gt;% filter(YEAR == &quot;2020&quot;))$ave
+  ) %&gt;% 
+  hc_add_theme(hc_theme_bloom()) %&gt;% 
+  hc_credits(
+    text = &quot;Диаграмма создана при использовании R и highcharter&quot;,
+    href = &quot;https://jkunst.com/highcharter/&quot;,
+    enabled = TRUE
+  )  %&gt;% 
+  hc_title(
+    text = &quot;Средние температуры воздуха в г. Красноярске в 2018-2020 гг.&quot;
+  )</code></pre>
+<pre class="r"><code># 3D-версия диаграммы
+hc %&gt;% 
+  hc_chart(
+    type = &quot;column&quot;,
+    options3d = list(
+      enabled = TRUE, 
+      beta = 15,
+      alpha = 15
+    )
+  )</code></pre>
+<div id="htmlwidget-8" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
+<script type="application/json" data-for="htmlwidget-8">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-32.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+<div id="заключение" class="section level2">
+<h2>Заключение</h2>
+<p>В статье были рассмотрены некоторые простейшие примеры создания визуализаций на основе <code>highcharter</code> и русификации библиотеки.</p>
+<p>Больше различных примеров визуализаций в библиотеке <code>highcharter</code> можно найти на</p>
+<ul>
+<li><p><a href="https://jkunst.com/highcharter/">странице библиотеки</a>,</p></li>
+<li><p><a href="https://jkunst.com/blog/#category:highcharter">Joshua Kunst</a>,</p></li>
+<li><p><a href="https://www.tmbish.me/lab/highcharter-cookbook/">Highcharter Cookbook</a>,</p></li>
+<li><p><a href="https://dataand.me/index.html#category:highcharter">Mara Averick</a>, а также в докладе</p></li>
+</ul>
+<div class="vembedr">
+<div>
+<iframe src="https://www.youtube.com/embed/l_U3hQ6mm60" width="533" height="300" frameborder="0" allowfullscreen="" data-external="1"></iframe>
+</div>
+</div>
+</div>
