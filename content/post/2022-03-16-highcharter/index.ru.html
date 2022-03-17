@@ -21,9 +21,6 @@ projects: []
 
 <link href="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.css" rel="stylesheet" />
 <script src="{{< blogdown/postref >}}index.ru_files/applause-button/applause-button.js"></script>
-<script src="{{< blogdown/postref >}}index.ru_files/htmlwidgets/htmlwidgets.js"></script>
-<script src="{{< blogdown/postref >}}index.ru_files/pymjs/pym.v1.js"></script>
-<script src="{{< blogdown/postref >}}index.ru_files/widgetframe-binding/widgetframe.js"></script>
 <link href="{{< blogdown/postref >}}index.ru_files/vembedr/css/vembedr.css" rel="stylesheet" />
 
 
@@ -98,8 +95,8 @@ library(magrittr)</code></pre>
   ) %&gt;% 
   hc_title(text = &quot;Города с населением свыше 300 000 чел.&quot;) %&gt;% 
   hc_subtitle(text = &quot;на 12.03.2021&quot;)</code></pre>
-<div id="htmlwidget-1" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-1">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-7.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="map_cities.html" width="672" height="500px" data-external="1">
+</iframe>
 <p>Другой пример построения карт показывает, как можно визуализировать глобальную карту. В качестве примера используем <a href="https://data.world/data-society/global-climate-change-data">Global Climate Change Data</a> (источник: <a href="http://berkeleyearth.org/data/">Berkeley Earth</a>).</p>
 <pre class="r"><code>AverageTemperature</code></pre>
 <pre><code>## # A tibble: 169 × 3
@@ -133,8 +130,8 @@ library(magrittr)</code></pre>
   ) %&gt;% 
   hc_title(text    = &quot;Средняя температура земной поверхности&quot;) %&gt;% 
   hc_subtitle(text = &quot;за период 2000-2013 гг.&quot;)</code></pre>
-<div id="htmlwidget-2" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-2">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-10.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="map_world.html" width="672" height="500px" data-external="1">
+</iframe>
 </div>
 <div id="русификация-highcharter" class="section level3">
 <h3>Русификация highcharter</h3>
@@ -170,8 +167,8 @@ AAPL.ave &lt;- SMA(Cl(AAPL), n = 5)</code></pre>
     hc_exporting(
     enabled = TRUE
   )</code></pre>
-<div id="htmlwidget-3" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-3">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-16.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="AAPL.html" width="672" height="500px" data-external="1">
+</iframe>
 </div>
 <div id="вложенные-диаграммы" class="section level3">
 <h3>Вложенные диаграммы</h3>
@@ -238,8 +235,8 @@ fire_drilldown</code></pre>
   hc_subtitle(text = &quot;в апреле 2020 года&quot;) %&gt;% 
   hc_caption(text  = &quot;по данным МЧС России&quot;) %&gt;%
   hc_add_theme(hc_theme_smpl())</code></pre>
-<div id="htmlwidget-4" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-4">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-21.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="drilldown.html" width="672" height="500px" data-external="1">
+</iframe>
 <p><code>highcharter</code> имеет богатые возможности для стилизации отображения диаграмм. Например, можно кастомизировать</p>
 <ul>
 <li><p>всплывающие подсказки (<a href="https://jkunst.com/highcharter/reference/hc_tooltip.html">Tooltip options</a>),</p></li>
@@ -314,17 +311,17 @@ weather_forecast %&gt;% head(3)</code></pre>
 <p>Теперь отобразим полученный результат используя стилизованную тему.</p>
 <pre class="r"><code>hc_weather %&gt;%
   hc_add_theme(hc_theme_smpl())</code></pre>
-<div id="htmlwidget-5" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-5">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-26.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="weather_base.html" width="672" height="500px" data-external="1">
+</iframe>
 <p>Отобразим тот же график используя другие темы.</p>
 <pre class="r"><code>hc_weather %&gt;%
   hc_add_theme(hc_theme_google())</code></pre>
-<div id="htmlwidget-6" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-6">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-27.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="weather_google.html" width="672" height="500px" data-external="1">
+</iframe>
 <pre class="r"><code>hc_weather %&gt;%
   hc_add_theme(hc_theme_538())</code></pre>
-<div id="htmlwidget-7" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-7">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-28.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="weather_538.html" width="672" height="500px" data-external="1">
+</iframe>
 </div>
 <div id="d-диаграммы" class="section level3">
 <h3>3D-диаграммы</h3>
@@ -397,8 +394,8 @@ hc %&gt;%
       alpha = 15
     )
   )</code></pre>
-<div id="htmlwidget-8" style="width:100%;height:480px;" class="widgetframe html-widget"></div>
-<script type="application/json" data-for="htmlwidget-8">{"x":{"url":"index.ru_files/figure-html//widgets/widget_unnamed-chunk-32.html","options":{"xdomain":"*","allowfullscreen":false,"lazyload":false}},"evals":[],"jsHooks":[]}</script>
+<iframe src="weather_3D.html" width="672" height="500px" data-external="1">
+</iframe>
 </div>
 </div>
 <div id="заключение" class="section level2">

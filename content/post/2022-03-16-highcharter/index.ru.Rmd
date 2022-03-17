@@ -69,6 +69,7 @@ library(highcharter)
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(widgetframe)
+library(htmlwidgets)
 ```
 
 
@@ -93,7 +94,7 @@ hchart(<data.frame>, <type_of_chart>, hcaes(<aesthetics>), ...)
 
 - `<data.frame>` -- таблица данных для построения диаграммы,
 
--  `<type_of_chart>` представляет собой строку для указания типа диаграммы; это значение может быть: линия, сплайн, область, тепловая карта, и т.д,
+- `<type_of_chart>` представляет собой строку для указания типа диаграммы; это значение может быть: линия, сплайн, область, тепловая карта, и т.д,
 
 - `<aesthetics>` -- используемое отображение для отрисовки данных,
 
@@ -158,7 +159,7 @@ hcmap("countries/ru/custom/ru-all-disputed", showInLegend = FALSE) %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "map_cities.html",
   hcmap("countries/ru/custom/ru-all-disputed", showInLegend = FALSE) %>% 
   hc_add_series(
     data = cities_300, 
@@ -170,6 +171,10 @@ frameWidget(
   hc_title(text = "Города с населением свыше 300 000 чел.") %>% 
   hc_subtitle(text = "на 12.03.2021")
   )
+
+knitr::include_url("map_cities.html", height = "500px")
+
+#htmltools::tags$iframe(src = "map.html")
 ```
 
 Другой пример построения карт показывает, как можно визуализировать глобальную карту. В качестве примера используем [Global Climate Change Data](https://data.world/data-society/global-climate-change-data) (источник: [Berkeley Earth](http://berkeleyearth.org/data/)).
@@ -244,7 +249,7 @@ hcmap(
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(hcmap(
+saveWidget(file = "map_world.html", hcmap(
   "custom/world-robinson-lowres", 
   data = AverageTemperature,
   name = "температура", 
@@ -262,6 +267,8 @@ frameWidget(hcmap(
   hc_title(text    = "Средняя температура земной поверхности") %>% 
   hc_subtitle(text = "за период 2000-2013 гг.")
   )
+
+knitr::include_url("map_world.html", height = "500px")
 ```
 
 
@@ -364,9 +371,8 @@ highchart(type = "stock") %>%
   )
 ```
 
-
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "AAPL.html", 
   highchart(type = "stock") %>% 
   hc_add_series(AAPL, 
                 yAxis = 0, 
@@ -381,6 +387,8 @@ frameWidget(
     enabled = TRUE
   )
 )
+
+knitr::include_url("AAPL.html", height = "500px")
 ```
 
 
@@ -460,7 +468,7 @@ hchart(fire_column,
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "drilldown.html", 
 hchart(fire_column,
        "column",
        hcaes(
@@ -483,6 +491,8 @@ hchart(fire_column,
   hc_caption(text  = "по данным МЧС России") %>%
   hc_add_theme(hc_theme_smpl())
 )
+
+knitr::include_url("drilldown.html", height = "500px")
 ```
 
 `highcharter` имеет богатые возможности для стилизации отображения диаграмм. Например, можно кастомизировать 
@@ -549,10 +559,12 @@ hc_weather %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "weather_base.html", 
 hc_weather %>%
   hc_add_theme(hc_theme_smpl())
 )
+
+knitr::include_url("weather_base.html", height = "500px")
 ```
 
 Отобразим тот же график используя другие темы.
@@ -563,10 +575,12 @@ hc_weather %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "weather_google.html", 
 hc_weather %>%
   hc_add_theme(hc_theme_google())
 )
+
+knitr::include_url("weather_google.html", height = "500px")
 ```
 
 ```r
@@ -575,10 +589,12 @@ hc_weather %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "weather_538.html", 
 hc_weather %>%
   hc_add_theme(hc_theme_538())
 )
+
+knitr::include_url("weather_538.html", height = "500px")
 ```
 
 ### 3D-диаграммы
@@ -657,7 +673,7 @@ hc %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-frameWidget(
+saveWidget(file = "weather_3D.html", 
 # 3D-версия диаграммы
 hc %>% 
   hc_chart(
@@ -669,6 +685,8 @@ hc %>%
     )
   )
 )
+
+knitr::include_url("weather_3D.html", height = "500px")
 ```
 
 
