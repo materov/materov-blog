@@ -159,20 +159,18 @@ hcmap("countries/ru/custom/ru-all-disputed", showInLegend = FALSE) %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "map_cities.html",
-  hcmap("countries/ru/custom/ru-all-disputed", showInLegend = FALSE) %>% 
-  hc_add_series(
-    data = cities_300, 
-    type = "mappoint",
-    hcaes(color = colors),
-    name = "Город",
-    tooltip = list(pointFormat = "{point.name}: {point.population:,.0f} чел.")
-  ) %>% 
-  hc_title(text = "Города с населением свыше 300 000 чел.") %>% 
-  hc_subtitle(text = "на 12.03.2021")
-  )
+# hcmap("countries/ru/custom/ru-all-disputed", showInLegend = FALSE) %>% 
+#   hc_add_series(
+#     data = cities_300, 
+#     type = "mappoint",
+#     hcaes(color = colors),
+#     name = "Город",
+#     tooltip = list(pointFormat = "{point.name}: {point.population:,.0f} чел.")
+#   ) %>% 
+#   hc_title(text = "Города с населением свыше 300 000 чел.") %>% 
+#   hc_subtitle(text = "на 12.03.2021")
 
-knitr::include_url("map_cities.html", height = "500px")
+knitr::include_url("https://modest-wiles-9551a3.netlify.app/", height = "500px")
 
 #htmltools::tags$iframe(src = "map.html")
 ```
@@ -249,26 +247,25 @@ hcmap(
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "map_world.html", hcmap(
-  "custom/world-robinson-lowres", 
-  data = AverageTemperature,
-  name = "температура", 
-  value = "aveT",
-  # необходимо сделать join стандартных индексов карты "iso-a3"
-  # и индексов стран из данных -- переменной "iso3"
-  joinBy        = c("iso-a3", "iso3"), 
-  borderWidth   = 0,
-  nullColor     = "#d3d3d3",
-  tooltip       = list(valueSuffix = "°C")
-  ) %>%
-  hc_colorAxis(
-    stops = color_stops(colors = viridisLite::inferno(10, begin = 0.1))
-  ) %>% 
-  hc_title(text    = "Средняя температура земной поверхности") %>% 
-  hc_subtitle(text = "за период 2000-2013 гг.")
-  )
-
-knitr::include_url("map_world.html", height = "500px")
+# hcmap(
+#   "custom/world-robinson-lowres", 
+#   data = AverageTemperature,
+#   name = "температура", 
+#   value = "aveT",
+#   # необходимо сделать join стандартных индексов карты "iso-a3"
+#   # и индексов стран из данных -- переменной "iso3"
+#   joinBy        = c("iso-a3", "iso3"), 
+#   borderWidth   = 0,
+#   nullColor     = "#d3d3d3",
+#   tooltip       = list(valueSuffix = "°C")
+#   ) %>%
+#   hc_colorAxis(
+#     stops = color_stops(colors = viridisLite::inferno(10, begin = 0.1))
+#   ) %>% 
+#   hc_title(text    = "Средняя температура земной поверхности") %>% 
+#   hc_subtitle(text = "за период 2000-2013 гг.")
+  
+knitr::include_url("https://wonderful-williams-b10928.netlify.app/", height = "500px")
 ```
 
 
@@ -372,23 +369,21 @@ highchart(type = "stock") %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "AAPL.html", 
-  highchart(type = "stock") %>% 
-  hc_add_series(AAPL, 
-                yAxis = 0, 
-                name  = "AAPL") %>% 
-  hc_add_series(AAPL.ave, 
-                yAxis = 0, 
-                name  = "скользящее среднее AAPL",
-                color = hex_to_rgba("blue", 0.7)) %>% 
-  hc_tooltip(valueDecimals = 2) %>% 
-  hc_title(text = "Котировки Apple") %>% 
-    hc_exporting(
-    enabled = TRUE
-  )
-)
+# highchart(type = "stock") %>% 
+#   hc_add_series(AAPL, 
+#                 yAxis = 0, 
+#                 name  = "AAPL") %>% 
+#   hc_add_series(AAPL.ave, 
+#                 yAxis = 0, 
+#                 name  = "скользящее среднее AAPL",
+#                 color = hex_to_rgba("blue", 0.7)) %>% 
+#   hc_tooltip(valueDecimals = 2) %>% 
+#   hc_title(text = "Котировки Apple") %>% 
+#     hc_exporting(
+#     enabled = TRUE
+#   )
 
-knitr::include_url("AAPL.html", height = "500px")
+knitr::include_url("https://elegant-bohr-2f35e5.netlify.app/", height = "500px")
 ```
 
 
@@ -468,31 +463,29 @@ hchart(fire_column,
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "drilldown.html", 
-hchart(fire_column,
-       "column",
-       hcaes(
-         x         = type_name,
-         y         = count,
-         name      = type_name, 
-         drilldown = type_name
-       ),
-       name = "количество пожаров",
-       colorByPoint = TRUE
-) %>% 
-  hc_drilldown(
-    allowPointDrilldown = TRUE,
-    series = list_parse(fire_drilldown)
-  ) %>% 
-  hc_xAxis(title   = "") %>% 
-  hc_yAxis(title   = "") %>% 
-  hc_title(text    = "Количество пожаров на территории Российской Федерации") %>% 
-  hc_subtitle(text = "в апреле 2020 года") %>% 
-  hc_caption(text  = "по данным МЧС России") %>%
-  hc_add_theme(hc_theme_smpl())
-)
+# hchart(fire_column,
+#        "column",
+#        hcaes(
+#          x         = type_name,
+#          y         = count,
+#          name      = type_name, 
+#          drilldown = type_name
+#        ),
+#        name = "количество пожаров",
+#        colorByPoint = TRUE
+# ) %>% 
+#   hc_drilldown(
+#     allowPointDrilldown = TRUE,
+#     series = list_parse(fire_drilldown)
+#   ) %>% 
+#   hc_xAxis(title   = "") %>% 
+#   hc_yAxis(title   = "") %>% 
+#   hc_title(text    = "Количество пожаров на территории Российской Федерации") %>% 
+#   hc_subtitle(text = "в апреле 2020 года") %>% 
+#   hc_caption(text  = "по данным МЧС России") %>%
+#   hc_add_theme(hc_theme_smpl())
 
-knitr::include_url("drilldown.html", height = "500px")
+knitr::include_url("https://musing-montalcini-580122.netlify.app/", height = "500px")
 ```
 
 `highcharter` имеет богатые возможности для стилизации отображения диаграмм. Например, можно кастомизировать 
@@ -559,12 +552,10 @@ hc_weather %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "weather_base.html", 
-hc_weather %>%
-  hc_add_theme(hc_theme_smpl())
-)
+# hc_weather %>%
+#   hc_add_theme(hc_theme_smpl())
 
-knitr::include_url("weather_base.html", height = "500px")
+knitr::include_url("https://elated-stonebraker-673a18.netlify.app/", height = "500px")
 ```
 
 Отобразим тот же график используя другие темы.
@@ -575,12 +566,10 @@ hc_weather %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "weather_google.html", 
-hc_weather %>%
-  hc_add_theme(hc_theme_google())
-)
+# hc_weather %>%
+#   hc_add_theme(hc_theme_google())
 
-knitr::include_url("weather_google.html", height = "500px")
+knitr::include_url("https://unruffled-goldwasser-303b10.netlify.app/", height = "500px")
 ```
 
 ```r
@@ -589,12 +578,10 @@ hc_weather %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "weather_538.html", 
-hc_weather %>%
-  hc_add_theme(hc_theme_538())
-)
+# hc_weather %>%
+#   hc_add_theme(hc_theme_538())
 
-knitr::include_url("weather_538.html", height = "500px")
+knitr::include_url("https://friendly-bose-53c99b.netlify.app/", height = "500px")
 ```
 
 ### 3D-диаграммы
@@ -673,20 +660,18 @@ hc %>%
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-saveWidget(file = "weather_3D.html", 
 # 3D-версия диаграммы
-hc %>% 
-  hc_chart(
-    type = "column",
-    options3d = list(
-      enabled = TRUE, 
-      beta = 15,
-      alpha = 15
-    )
-  )
-)
+# hc %>% 
+#   hc_chart(
+#     type = "column",
+#     options3d = list(
+#       enabled = TRUE, 
+#       beta = 15,
+#       alpha = 15
+#     )
+#   )
 
-knitr::include_url("weather_3D.html", height = "500px")
+knitr::include_url("https://loving-hermann-0ec9ec.netlify.app/", height = "500px")
 ```
 
 
