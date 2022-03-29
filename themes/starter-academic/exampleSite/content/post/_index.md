@@ -1,5 +1,5 @@
 ---
-title: Posts
+title: Публикации
 cms_exclude: true
 
 # View.
